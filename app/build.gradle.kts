@@ -53,6 +53,7 @@ android {
 dependencies {
 
     implementation(libs.firebase.firestore)
+    implementation(libs.firebase.storage)
     val nav_version = "2.8.4"
 
     // Jetpack Compose integration
