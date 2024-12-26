@@ -50,6 +50,12 @@ android {
 }
 
 dependencies {
+
+    val nav_version = "2.8.4"
+
+    // Jetpack Compose integration
+    implementation("androidx.navigation:navigation-compose:$nav_version")
+
     //coil
     implementation("io.coil-kt.coil3:coil-compose:3.0.4")
     //viewmodel
@@ -63,6 +69,8 @@ dependencies {
     implementation(libs.androidx.ui.graphics)
     implementation(libs.androidx.ui.tooling.preview)
     implementation(libs.androidx.material3)
+    implementation(libs.androidx.foundation.android)
+    implementation(libs.androidx.ui.test.android)
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)
