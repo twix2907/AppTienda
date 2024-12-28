@@ -202,6 +202,16 @@ class ProductoViewModel(
             maxId + 1
         }
     }
+    fun getNombresSimilares(nombre: String): List<String> {
+        if (nombre.length < 3) return emptyList() // Solo buscar si hay al menos 3 caracteres
+
+        return productos.value
+            .filter { producto ->
+                producto.nombre.contains(nombre, ignoreCase = true) ||
+                        nombre.contains(producto.nombre, ignoreCase = true)
+            }
+            .map { it.nombre }
+    }
 
 
 }

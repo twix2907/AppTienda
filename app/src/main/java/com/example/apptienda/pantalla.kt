@@ -84,7 +84,7 @@ fun ProductListScreen(
     val filteredAndSortedProducts = productos
         .filter { producto ->
             val matchesSearch = producto.nombre.contains(searchQuery, ignoreCase = true) ||
-                    producto.descripcion.contains(searchQuery, ignoreCase = true)
+                    producto.idNumerico.toString().equals(searchQuery) // Búsqueda por ID
             val matchesCategory = selectedCategory == null ||
                     producto.categorias.contains(selectedCategory)
             matchesSearch && matchesCategory
@@ -246,7 +246,7 @@ fun ProductListScreen(
 
 
                     .padding(horizontal = 16.dp, vertical = 1.dp),
-                placeholder = { Text("Buscar productos...") },
+                placeholder = { Text("Buscar productos por nombre o id...") },
                 leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
                 trailingIcon = {
                     if (searchQuery.isNotEmpty()) {
@@ -412,7 +412,7 @@ private fun needsExpansion(
                         )
 
                         Text(
-                            text = "$ ${String.format("%.2f", producto.precio)}",
+                            text = "S/. ${String.format("%.2f", producto.precio)}",
                             style = MaterialTheme.typography.titleMedium,
                             color = MaterialTheme.colorScheme.primary,
                             fontWeight = FontWeight.Bold
@@ -486,7 +486,11 @@ private fun needsExpansion(
                         ) {
                             AsyncImage(
                                 model = ImageRequest.Builder(LocalContext.current)
-                                    .data(producto.imageUrl.replace("http://", "https://"))
+                                    .data(if (producto.imageUrl.isNullOrEmpty()) {
+                                        R.drawable.placeholder // Tu imagen placeholder
+                                    } else {
+                                        producto.imageUrl.replace("http://", "https://")
+                                    })
                                     .crossfade(true)
                                     .build(),
                                 contentDescription = producto.nombre,
@@ -600,6 +604,48 @@ private fun needsExpansion(
                 }
             )
         }
+        // Diálogo de vista previa de imagen con zoom
+        if (showImagePreview) {
+            Dialog(
+                onDismissRequest = { showImagePreview = false },
+                properties = DialogProperties(
+                    dismissOnBackPress = true,
+                    dismissOnClickOutside = true
+                )
+            ) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(16.dp)
+                        .background(
+                            color = MaterialTheme.colorScheme.surface,
+                            shape = RoundedCornerShape(8.dp)
+                        )
+                ) {
+                    ZoomableImage(
+                        imageUrl = if (producto.imageUrl.isNullOrEmpty()) {
+                            R.drawable.placeholder.toString()
+                        } else {
+                            producto.imageUrl.replace("http://", "https://")
+                        },
+                        contentDescription = producto.nombre
+                    )
+
+                    IconButton(
+                        onClick = { showImagePreview = false },
+                        modifier = Modifier
+                            .align(Alignment.TopEnd)
+                            .padding(8.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Close,
+                            contentDescription = "Cerrar",
+                            tint = MaterialTheme.colorScheme.onSurface
+                        )
+                    }
+                }
+            }
+        }
     }
 
 @Composable
@@ -664,7 +710,7 @@ fun GridProductList(
     }
 }
 
-@OptIn(ExperimentalFoundationApi::class)
+@OptIn(ExperimentalFoundationApi::class, ExperimentalLayoutApi::class)
 @Composable
 fun GridProductCard(
     producto: Producto,
@@ -673,141 +719,214 @@ fun GridProductCard(
 ) {
     var showMenu by remember { mutableStateOf(false) }
     var showDeleteDialog by remember { mutableStateOf(false) }
-    val scope = rememberCoroutineScope()
     var showImagePreview by remember { mutableStateOf(false) }
+    var isExpanded by remember { mutableStateOf(false) }
+    val scope = rememberCoroutineScope()
 
     ElevatedCard(
         modifier = Modifier
             .fillMaxWidth()
-            .height(280.dp)
+            .animateContentSize(
+                animationSpec = spring(
+                    dampingRatio = Spring.DampingRatioLowBouncy,
+                    stiffness = Spring.StiffnessLow
+                )
+            )
+            .clickable { isExpanded = !isExpanded }
     ) {
         Column {
             Box {
-                // Imagen
-                Box(
+                AsyncImage(
+                    model = ImageRequest.Builder(LocalContext.current)
+                        .data(if (producto.imageUrl.isNullOrEmpty()) {
+                            R.drawable.placeholder // Tu imagen placeholder
+                        } else {
+                            producto.imageUrl.replace("http://", "https://")
+                        })
+                        .crossfade(true)
+                        .build(),
+                    contentDescription = producto.nombre,
                     modifier = Modifier
                         .fillMaxWidth()
                         .height(160.dp)
-                ) {
-                    AsyncImage(
-                        model = ImageRequest.Builder(LocalContext.current)
-                            .data(producto.imageUrl.replace("http://", "https://"))
-                            .crossfade(true)
-                            .build(),
-                        contentDescription = producto.nombre,
-                        modifier = Modifier.fillMaxSize().combinedClickable(
+                        .combinedClickable(
                             onClick = { },
                             onLongClick = { showImagePreview = true }
                         ),
+                    contentScale = ContentScale.Crop
+                )
 
-                        contentScale = ContentScale.Crop
-                    )
-
-                    // Menú de opciones con fondo semitransparente
-                    Box(
-                        modifier = Modifier
-                            .padding(4.dp)
-                            .align(Alignment.TopEnd)
-                            .background(
-                                color = MaterialTheme.colorScheme.surface.copy(alpha = 0.7f),
-                                shape = CircleShape
-                            )
+                // Menú de opciones
+                Box(
+                    modifier = Modifier
+                        .padding(4.dp)
+                        .align(Alignment.TopEnd)
+                        .background(
+                            color = MaterialTheme.colorScheme.surface.copy(alpha = 0.7f),
+                            shape = CircleShape
+                        )
+                ) {
+                    IconButton(
+                        onClick = { showMenu = true },
+                        modifier = Modifier.size(32.dp)
                     ) {
-                        IconButton(
-                            onClick = { showMenu = true },
-                            modifier = Modifier.size(32.dp)
-                        ) {
-                            Icon(
-                                Icons.Default.MoreVert,
-                                contentDescription = "Opciones",
-                                tint = MaterialTheme.colorScheme.onSurface,
-                                modifier = Modifier.size(20.dp)
-                            )
-                        }
+                        Icon(
+                            Icons.Default.MoreVert,
+                            contentDescription = "Opciones",
+                            tint = MaterialTheme.colorScheme.onSurface,
+                            modifier = Modifier.size(20.dp)
+                        )
+                    }
 
-                        DropdownMenu(
-                            expanded = showMenu,
-                            onDismissRequest = { showMenu = false }
-                        ) {
-                            DropdownMenuItem(
-                                text = {
-                                    Row(
-                                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                                        verticalAlignment = Alignment.CenterVertically
-                                    ) {
-                                        Icon(
-                                            imageVector = Icons.Default.Edit,
-                                            contentDescription = null,
-                                            tint = MaterialTheme.colorScheme.primary
-                                        )
-                                        Text("Editar")
-                                    }
-                                },
-                                onClick = {
-                                    showMenu = false
-                                    onNavigateToEdit(producto)
+                    DropdownMenu(
+                        expanded = showMenu,
+                        onDismissRequest = { showMenu = false }
+                    ) {
+                        DropdownMenuItem(
+                            text = {
+                                Row(
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.Edit,
+                                        contentDescription = null,
+                                        tint = MaterialTheme.colorScheme.primary
+                                    )
+                                    Text("Editar")
                                 }
-                            )
-                            DropdownMenuItem(
-                                text = {
-                                    Row(
-                                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                                        verticalAlignment = Alignment.CenterVertically
-                                    ) {
-                                        Icon(
-                                            imageVector = Icons.Default.Delete,
-                                            contentDescription = null,
-                                            tint = MaterialTheme.colorScheme.error
-                                        )
-                                        Text(
-                                            "Eliminar",
-                                            color = MaterialTheme.colorScheme.error
-                                        )
-                                    }
-                                },
-                                onClick = {
-                                    showMenu = false
-                                    showDeleteDialog = true
+                            },
+                            onClick = {
+                                showMenu = false
+                                onNavigateToEdit(producto)
+                            }
+                        )
+                        DropdownMenuItem(
+                            text = {
+                                Row(
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.Delete,
+                                        contentDescription = null,
+                                        tint = MaterialTheme.colorScheme.error
+                                    )
+                                    Text(
+                                        "Eliminar",
+                                        color = MaterialTheme.colorScheme.error
+                                    )
                                 }
-                            )
-                        }
+                            },
+                            onClick = {
+                                showMenu = false
+                                showDeleteDialog = true
+                            }
+                        )
                     }
                 }
             }
 
+            // Información apilada verticalmente
             Column(
                 modifier = Modifier
-                    .padding(12.dp)
                     .fillMaxWidth()
+                    .padding(12.dp),
+                verticalArrangement = Arrangement.spacedBy(4.dp)
             ) {
+                // Nombre
                 Text(
                     text = producto.nombre,
                     style = MaterialTheme.typography.titleMedium,
-                    maxLines = 1,
+                    maxLines = if (isExpanded) Int.MAX_VALUE else 1,
                     overflow = TextOverflow.Ellipsis
                 )
+
+                // ID
                 Text(
                     text = "#${producto.idNumerico}",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.primary
                 )
-                Spacer(modifier = Modifier.height(4.dp))
+
+                // Precio
                 Text(
                     text = "$ ${String.format("%.2f", producto.precio)}",
                     style = MaterialTheme.typography.titleSmall,
-                    color = MaterialTheme.colorScheme.primary
+                    color = MaterialTheme.colorScheme.primary,
+                    fontWeight = FontWeight.Bold
                 )
+
+                // Descripción
                 Text(
                     text = producto.descripcion,
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 2,
+                    maxLines = if (isExpanded) Int.MAX_VALUE else 2,
                     overflow = TextOverflow.Ellipsis
                 )
+
+                // Categorías
+                if (producto.categorias.isNotEmpty()) {
+                    FlowRow(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(4.dp),
+                        verticalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        val categoriasToShow = if (!isExpanded && producto.categorias.size > 2) {
+                            producto.categorias.take(2)
+                        } else {
+                            producto.categorias
+                        }
+
+                        categoriasToShow.forEach { categoriaId ->
+                            viewModel.getCategoriaById(categoriaId)?.let { categoria ->
+                                AssistChip(
+                                    onClick = { },
+                                    label = {
+                                        Text(
+                                            text = categoria.nombre,
+                                            style = MaterialTheme.typography.labelSmall
+                                        )
+                                    },
+                                    modifier = Modifier.height(24.dp)
+                                )
+                            }
+                        }
+
+                        if (!isExpanded && producto.categorias.size > 2) {
+                            AssistChip(
+                                onClick = { },
+                                label = {
+                                    Text(
+                                        text = "+${producto.categorias.size - 2}",
+                                        style = MaterialTheme.typography.labelSmall
+                                    )
+                                },
+                                modifier = Modifier.height(24.dp)
+                            )
+                        }
+                    }
+                }
+
+                // Ver más
+                if (needsExpansion(producto.descripcion, producto.categorias, isExpanded)) {
+                    Text(
+                        text = "ver más...",
+                        style = MaterialTheme.typography.bodySmall.copy(
+                            fontStyle = FontStyle.Italic
+                        ),
+                        color = MaterialTheme.colorScheme.primary.copy(alpha = 0.8f),
+                        modifier = Modifier
+                            .align(Alignment.End)
+                            .padding(top = 4.dp)
+                    )
+                }
             }
         }
     }
 
+    // Continuación de los diálogos
     if (showDeleteDialog) {
         AlertDialog(
             onDismissRequest = { showDeleteDialog = false },
@@ -835,7 +954,7 @@ fun GridProductCard(
             }
         )
     }
-    // Diálogo de vista previa de imagen con zoom
+
     if (showImagePreview) {
         Dialog(
             onDismissRequest = { showImagePreview = false },
@@ -853,13 +972,11 @@ fun GridProductCard(
                         shape = RoundedCornerShape(8.dp)
                     )
             ) {
-                // Imagen con zoom
                 ZoomableImage(
                     imageUrl = producto.imageUrl.replace("http://", "https://"),
                     contentDescription = producto.nombre
                 )
 
-                // Botón de cerrar
                 IconButton(
                     onClick = { showImagePreview = false },
                     modifier = Modifier
@@ -901,295 +1018,150 @@ fun CompactProductCard(
 ) {
     var showMenu by remember { mutableStateOf(false) }
     var showDeleteDialog by remember { mutableStateOf(false) }
-    val scope = rememberCoroutineScope()
     var showImagePreview by remember { mutableStateOf(false) }
-
-    ElevatedCard(
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(100.dp)
-    ) {
-        Box(modifier = Modifier.fillMaxSize()) {
-            // Menú de opciones
-            Box(
-                modifier = Modifier
-                    .align(Alignment.TopEnd)
-                    .padding(4.dp)
-            ) {
-                IconButton(onClick = { showMenu = true }) {
-                    Icon(Icons.Default.MoreVert, contentDescription = "Opciones")
-                }
-
-                DropdownMenu(
-                    expanded = showMenu,
-                    onDismissRequest = { showMenu = false }
-                ) {
-                    DropdownMenuItem(
-                        text = {
-                            Row(
-                                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.Edit,
-                                    contentDescription = null,
-                                    tint = MaterialTheme.colorScheme.primary
-                                )
-                                Text("Editar")
-                            }
-                        },
-                        onClick = {
-                            showMenu = false
-                            onNavigateToEdit(producto)
-                        }
-                    )
-                    DropdownMenuItem(
-                        text = {
-                            Row(
-                                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.Delete,
-                                    contentDescription = null,
-                                    tint = MaterialTheme.colorScheme.error
-                                )
-                                Text(
-                                    "Eliminar",
-                                    color = MaterialTheme.colorScheme.error
-                                )
-                            }
-                        },
-                        onClick = {
-                            showMenu = false
-                            showDeleteDialog = true
-                        }
-                    )
-                }
-            }
-
-            Row(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(8.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                Card(
-                    modifier = Modifier
-                        .size(84.dp)
-                        .clip(MaterialTheme.shapes.small)
-                ) {
-                    AsyncImage(
-                        model = ImageRequest.Builder(LocalContext.current)
-                            .data(producto.imageUrl.replace("http://", "https://"))
-                            .crossfade(true)
-                            .build(),
-                        contentDescription = producto.nombre,
-                        modifier = Modifier.fillMaxSize().combinedClickable(
-                                onClick = { },
-                        onLongClick = { showImagePreview = true }
-                    ),
-                        contentScale = ContentScale.Crop
-                    )
-                }
-
-                Column(
-                    modifier = Modifier.weight(1f)
-                ) {
-                    Text(
-                        text = producto.nombre,
-                        style = MaterialTheme.typography.titleMedium,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                    Text(
-                        text = "#${producto.idNumerico}",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.primary
-                    )
-                    Text(
-                        text = "$ ${String.format("%.2f", producto.precio)}",
-                        style = MaterialTheme.typography.titleSmall,
-                        color = MaterialTheme.colorScheme.primary
-                    )
-                    Text(
-                        text = producto.descripcion,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                    if (producto.categorias.isNotEmpty()) {
-                        FlowRow(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(4.dp),
-                            verticalArrangement = Arrangement.spacedBy(4.dp)
-                        ) {
-                            producto.categorias.forEach { categoriaId ->
-                                viewModel.getCategoriaById(categoriaId)?.let { categoria ->
-                                    AssistChip(
-                                        onClick = { },
-                                        label = {
-                                            Text(
-                                                text = categoria.nombre,
-                                                style = MaterialTheme.typography.labelSmall
-                                            )
-                                        },
-                                        modifier = Modifier.height(24.dp)
-                                    )
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        }
-    }
-
-    if (showDeleteDialog) {
-        AlertDialog(
-            onDismissRequest = { showDeleteDialog = false },
-            title = { Text("Eliminar producto") },
-            text = { Text("¿Estás seguro de que quieres eliminar este producto?") },
-            confirmButton = {
-                TextButton(
-                    onClick = {
-                        scope.launch {
-                            viewModel.eliminarProducto(producto.id)
-                        }
-                        showDeleteDialog = false
-                    },
-                    colors = ButtonDefaults.textButtonColors(
-                        contentColor = MaterialTheme.colorScheme.error
-                    )
-                ) {
-                    Text("Eliminar")
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { showDeleteDialog = false }) {
-                    Text("Cancelar")
-                }
-            }
-        )
-    }
-    // Diálogo de vista previa de imagen con zoom
-    if (showImagePreview) {
-        Dialog(
-            onDismissRequest = { showImagePreview = false },
-            properties = DialogProperties(
-                dismissOnBackPress = true,
-                dismissOnClickOutside = true
-            )
-        ) {
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(16.dp)
-                    .background(
-                        color = MaterialTheme.colorScheme.surface,
-                        shape = RoundedCornerShape(8.dp)
-                    )
-            ) {
-                // Imagen con zoom
-                ZoomableImage(
-                    imageUrl = producto.imageUrl.replace("http://", "https://"),
-                    contentDescription = producto.nombre
-                )
-
-                // Botón de cerrar
-                IconButton(
-                    onClick = { showImagePreview = false },
-                    modifier = Modifier
-                        .align(Alignment.TopEnd)
-                        .padding(8.dp)
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Close,
-                        contentDescription = "Cerrar",
-                        tint = MaterialTheme.colorScheme.onSurface
-                    )
-                }
-            }
-        }
-    }
-}
-
-@Composable
-fun SimpleProductList(
-    productos: List<Producto>,
-    viewModel: ProductoViewModel,
-    onNavigateToEdit: (Producto) -> Unit
-) {
-    LazyColumn(
-        contentPadding = PaddingValues(16.dp),
-        verticalArrangement = Arrangement.spacedBy(8.dp)
-    ) {
-        items(productos) { producto ->
-            SimpleProductCard(producto, viewModel, onNavigateToEdit)
-        }
-    }
-}
-
-@Composable
-fun SimpleProductCard(
-    producto: Producto,
-    viewModel: ProductoViewModel,
-    onNavigateToEdit: (Producto) -> Unit
-) {
-    var showMenu by remember { mutableStateOf(false) }
-    var showDeleteDialog by remember { mutableStateOf(false) }
+    var isExpanded by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
 
     ElevatedCard(
         modifier = Modifier
             .fillMaxWidth()
-            .height(72.dp)
+            .animateContentSize(
+                animationSpec = spring(
+                    dampingRatio = Spring.DampingRatioLowBouncy,
+                    stiffness = Spring.StiffnessLow
+                )
+            )
+            .clickable { isExpanded = !isExpanded }
     ) {
         Row(
             modifier = Modifier
-                .fillMaxSize()
-                .padding(horizontal = 16.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
+                .fillMaxWidth()
+                .padding(8.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
+            Card(
+                modifier = Modifier
+                    .size(84.dp)
+                    .clip(MaterialTheme.shapes.small)
+            ) {
+                AsyncImage(
+                    model = ImageRequest.Builder(LocalContext.current)
+                        .data(if (producto.imageUrl.isNullOrEmpty()) {
+                            R.drawable.placeholder // Tu imagen placeholder
+                        } else {
+                            producto.imageUrl.replace("http://", "https://")
+                        })
+                        .crossfade(true)
+                        .build(),
+                    contentDescription = producto.nombre,
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .combinedClickable(
+                            onClick = { },
+                            onLongClick = { showImagePreview = true }
+                        ),
+                    contentScale = ContentScale.Crop
+                )
+            }
+
+            // Información apilada verticalmente (lado derecho)
             Column(
                 modifier = Modifier
                     .weight(1f)
-                    .padding(end = 8.dp)
+                    .padding(end = 8.dp),
+                verticalArrangement = Arrangement.spacedBy(4.dp)
             ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    Text(
-                        text = producto.nombre,
-                        style = MaterialTheme.typography.titleMedium,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                    Text(
-                        text = "#${producto.idNumerico}",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.primary
-                    )
-                }
+                // Nombre
+                Text(
+                    text = producto.nombre,
+                    style = MaterialTheme.typography.titleMedium,
+                    maxLines = if (isExpanded) Int.MAX_VALUE else 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+
+                // ID
+                Text(
+                    text = "#${producto.idNumerico}",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.primary
+                )
+
+                // Precio
+                Text(
+                    text = "$ ${String.format("%.2f", producto.precio)}",
+                    style = MaterialTheme.typography.titleSmall,
+                    color = MaterialTheme.colorScheme.primary,
+                    fontWeight = FontWeight.Bold
+                )
+
+                // Descripción
                 Text(
                     text = producto.descripcion,
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 1,
+                    maxLines = if (isExpanded) Int.MAX_VALUE else 2,
                     overflow = TextOverflow.Ellipsis
                 )
+
+                // Categorías
+                if (producto.categorias.isNotEmpty()) {
+                    FlowRow(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(4.dp),
+                        verticalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        val categoriasToShow = if (!isExpanded && producto.categorias.size > 2) {
+                            producto.categorias.take(2)
+                        } else {
+                            producto.categorias
+                        }
+
+                        categoriasToShow.forEach { categoriaId ->
+                            viewModel.getCategoriaById(categoriaId)?.let { categoria ->
+                                AssistChip(
+                                    onClick = { },
+                                    label = {
+                                        Text(
+                                            text = categoria.nombre,
+                                            style = MaterialTheme.typography.labelSmall
+                                        )
+                                    },
+                                    modifier = Modifier.height(24.dp)
+                                )
+                            }
+                        }
+
+                        if (!isExpanded && producto.categorias.size > 2) {
+                            AssistChip(
+                                onClick = { },
+                                label = {
+                                    Text(
+                                        text = "+${producto.categorias.size - 2}",
+                                        style = MaterialTheme.typography.labelSmall
+                                    )
+                                },
+                                modifier = Modifier.height(24.dp)
+                            )
+                        }
+                    }
+                }
+
+                // Ver más
+                if (needsExpansion(producto.descripcion, producto.categorias, isExpanded)) {
+                    Text(
+                        text = "ver más...",
+                        style = MaterialTheme.typography.bodySmall.copy(
+                            fontStyle = FontStyle.Italic
+                        ),
+                        color = MaterialTheme.colorScheme.primary.copy(alpha = 0.8f),
+                        modifier = Modifier
+                            .align(Alignment.End)
+                            .padding(top = 4.dp)
+                    )
+                }
             }
 
-            Text(
-                text = "$ ${String.format("%.2f", producto.precio)}",
-                style = MaterialTheme.typography.titleMedium,
-                color = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.padding(horizontal = 8.dp)
-            )
-
+            // Menú de opciones
             Box {
                 IconButton(
                     onClick = { showMenu = true },
@@ -1248,10 +1220,268 @@ fun SimpleProductCard(
                         }
                     )
                 }
+                // Diálogos
+                if (showDeleteDialog) {
+                    AlertDialog(
+                        onDismissRequest = { showDeleteDialog = false },
+                        title = { Text("Eliminar producto") },
+                        text = { Text("¿Estás seguro de que quieres eliminar este producto?") },
+                        confirmButton = {
+                            TextButton(
+                                onClick = {
+                                    scope.launch {
+                                        viewModel.eliminarProducto(producto.id)
+                                    }
+                                    showDeleteDialog = false
+                                },
+                                colors = ButtonDefaults.textButtonColors(
+                                    contentColor = MaterialTheme.colorScheme.error
+                                )
+                            ) {
+                                Text("Eliminar")
+                            }
+                        },
+                        dismissButton = {
+                            TextButton(onClick = { showDeleteDialog = false }) {
+                                Text("Cancelar")
+                            }
+                        }
+                    )
+                }
+
+                if (showImagePreview) {
+                    Dialog(
+                        onDismissRequest = { showImagePreview = false },
+                        properties = DialogProperties(
+                            dismissOnBackPress = true,
+                            dismissOnClickOutside = true
+                        )
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(16.dp)
+                                .background(
+                                    color = MaterialTheme.colorScheme.surface,
+                                    shape = RoundedCornerShape(8.dp)
+                                )
+                        ) {
+                            ZoomableImage(
+                                imageUrl = producto.imageUrl.replace("http://", "https://"),
+                                contentDescription = producto.nombre
+                            )
+
+                            IconButton(
+                                onClick = { showImagePreview = false },
+                                modifier = Modifier
+                                    .align(Alignment.TopEnd)
+                                    .padding(8.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Close,
+                                    contentDescription = "Cerrar",
+                                    tint = MaterialTheme.colorScheme.onSurface
+                                )
+                            }
+                        }
+                    }
+                }
+            }
             }
         }
     }
 
+
+@Composable
+fun SimpleProductList(
+    productos: List<Producto>,
+    viewModel: ProductoViewModel,
+    onNavigateToEdit: (Producto) -> Unit
+) {
+    LazyColumn(
+        contentPadding = PaddingValues(16.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        items(productos) { producto ->
+            SimpleProductCard(producto, viewModel, onNavigateToEdit)
+        }
+    }
+}
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+fun SimpleProductCard(
+    producto: Producto,
+    viewModel: ProductoViewModel,
+    onNavigateToEdit: (Producto) -> Unit
+) {
+    var showMenu by remember { mutableStateOf(false) }
+    var showDeleteDialog by remember { mutableStateOf(false) }
+    var isExpanded by remember { mutableStateOf(false) }
+    val scope = rememberCoroutineScope()
+
+    ElevatedCard(
+        modifier = Modifier
+            .fillMaxWidth()
+            .animateContentSize(
+                animationSpec = spring(
+                    dampingRatio = Spring.DampingRatioLowBouncy,
+                    stiffness = Spring.StiffnessLow
+                )
+            )
+            .clickable { isExpanded = !isExpanded }
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 8.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.Top
+            ) {
+                Column(
+                    modifier = Modifier.weight(1f)
+                ) {
+                    // Nombre
+                    Text(
+                        text = producto.nombre,
+                        style = MaterialTheme.typography.titleMedium,
+                        maxLines = if (isExpanded) Int.MAX_VALUE else 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                    // ID debajo del nombre
+                    Text(
+                        text = "#${producto.idNumerico}",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                }
+
+                // Precio
+                Text(
+                    text = "$ ${String.format("%.2f", producto.precio)}",
+                    style = MaterialTheme.typography.titleMedium,
+                    color = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.padding(horizontal = 8.dp)
+                )
+
+                // Menú de opciones
+                Box {
+                    IconButton(
+                        onClick = { showMenu = true },
+                        modifier = Modifier.size(32.dp)
+                    ) {
+                        Icon(
+                            Icons.Default.MoreVert,
+                            contentDescription = "Opciones",
+                            modifier = Modifier.size(20.dp)
+                        )
+                    }
+
+                    DropdownMenu(
+                        expanded = showMenu,
+                        onDismissRequest = { showMenu = false }
+                    ) {
+                        DropdownMenuItem(
+                            text = {
+                                Row(
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.Edit,
+                                        contentDescription = null,
+                                        tint = MaterialTheme.colorScheme.primary
+                                    )
+                                    Text("Editar")
+                                }
+                            },
+                            onClick = {
+                                showMenu = false
+                                onNavigateToEdit(producto)
+                            }
+                        )
+                        DropdownMenuItem(
+                            text = {
+                                Row(
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.Delete,
+                                        contentDescription = null,
+                                        tint = MaterialTheme.colorScheme.error
+                                    )
+                                    Text(
+                                        "Eliminar",
+                                        color = MaterialTheme.colorScheme.error
+                                    )
+                                }
+                            },
+                            onClick = {
+                                showMenu = false
+                                showDeleteDialog = true
+                            }
+                        )
+                    }
+                }
+            }
+
+            // Descripción expandible
+            if (isExpanded) {
+                Text(
+                    text = producto.descripcion,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(top = 4.dp)
+                )
+
+                // Categorías en estado expandido
+                if (producto.categorias.isNotEmpty()) {
+                    FlowRow(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(top = 8.dp),
+                        horizontalArrangement = Arrangement.spacedBy(4.dp),
+                        verticalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        producto.categorias.forEach { categoriaId ->
+                            viewModel.getCategoriaById(categoriaId)?.let { categoria ->
+                                AssistChip(
+                                    onClick = { },
+                                    label = {
+                                        Text(
+                                            text = categoria.nombre,
+                                            style = MaterialTheme.typography.labelSmall
+                                        )
+                                    },
+                                    modifier = Modifier.height(24.dp)
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+
+            // "ver más" si hay contenido adicional
+            if (!isExpanded && (producto.descripcion.isNotEmpty() || producto.categorias.isNotEmpty())) {
+                Text(
+                    text = "ver más...",
+                    style = MaterialTheme.typography.bodySmall.copy(
+                        fontStyle = FontStyle.Italic
+                    ),
+                    color = MaterialTheme.colorScheme.primary.copy(alpha = 0.8f),
+                    modifier = Modifier
+                        .align(Alignment.End)
+                        .padding(top = 4.dp)
+                )
+            }
+        }
+    }
+
+    // Diálogo de confirmación para eliminar
     if (showDeleteDialog) {
         AlertDialog(
             onDismissRequest = { showDeleteDialog = false },

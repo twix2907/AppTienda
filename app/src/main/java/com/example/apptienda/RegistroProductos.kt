@@ -77,11 +77,16 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Divider
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.FilterChip
+import androidx.compose.material3.OutlinedTextFieldDefaults
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.input.pointer.pointerInput
 import kotlinx.coroutines.launch
 
@@ -94,6 +99,7 @@ fun AddProductScreen(
     onNavigateBack: () -> Unit
 ) {
     var nombre by remember { mutableStateOf("") }
+    var nombresSimilares by remember { mutableStateOf<List<String>>(emptyList()) }
     var descripcion by remember { mutableStateOf("") }
     var precio by remember { mutableStateOf("") }
     var imageUri by remember { mutableStateOf<Uri?>(null) }
@@ -147,6 +153,14 @@ fun AddProductScreen(
         }
     }
 
+    // Efecto para verificar nombres similares mientras se escribe
+    LaunchedEffect(nombre) {
+        if (nombre.isNotEmpty()) {
+            nombresSimilares = viewModel.getNombresSimilares(nombre)
+        } else {
+            nombresSimilares = emptyList()
+        }
+    }
     // Diálogo de error
     if (showErrorDialog) {
         AlertDialog(
@@ -249,16 +263,58 @@ fun AddProductScreen(
                     verticalArrangement = Arrangement.spacedBy(16.dp)
                 ) {
                     // Campo de nombre
-                    OutlinedTextField(
-                        value = nombre,
-                        onValueChange = { nombre = it },
-                        label = { Text("Nombre del producto") },
-                        modifier = Modifier.fillMaxWidth(),
-                        singleLine = true,
-                        leadingIcon = {
-                            Icon(Icons.Default.Create, contentDescription = null)
+                    Box(modifier = Modifier.fillMaxWidth()) {
+                        OutlinedTextField(
+                            value = nombre,
+                            onValueChange = { nombre = it },
+                            label = { Text("Nombre del producto") },
+                            modifier = Modifier.fillMaxWidth(),
+                            singleLine = true,
+                            leadingIcon = {
+                                Icon(Icons.Default.Create, contentDescription = null)
+                            }
+                        )
+
+                        if (nombresSimilares.isNotEmpty()) {
+                            Card(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(top = 60.dp) // Ajusta según necesites
+                                    .shadow(4.dp),
+                                colors = CardDefaults.cardColors(
+                                    containerColor = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.95f)
+                                )
+                            ) {
+                                Column(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(8.dp)
+                                ) {
+                                    Text(
+                                        text = "¡Productos similares encontrados!",
+                                        style = MaterialTheme.typography.titleSmall,
+                                        color = MaterialTheme.colorScheme.onErrorContainer
+                                    )
+                                    Spacer(modifier = Modifier.height(4.dp))
+                                    nombresSimilares.take(3).forEach { nombreSimilar ->
+                                        Text(
+                                            text = "• $nombreSimilar",
+                                            style = MaterialTheme.typography.bodyMedium,
+                                            color = MaterialTheme.colorScheme.onErrorContainer.copy(alpha = 0.8f)
+                                        )
+                                    }
+                                    if (nombresSimilares.size > 3) {
+                                        Text(
+                                            text = "... y ${nombresSimilares.size - 3} más",
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = MaterialTheme.colorScheme.onErrorContainer.copy(alpha = 0.7f),
+                                            modifier = Modifier.padding(top = 4.dp)
+                                        )
+                                    }
+                                }
+                            }
                         }
-                    )
+                    }
 
                     // Campo de descripción
                     OutlinedTextField(
