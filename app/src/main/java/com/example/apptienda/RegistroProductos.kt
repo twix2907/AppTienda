@@ -64,6 +64,8 @@ import java.util.Locale
 import android.Manifest.permission.CAMERA
 import android.content.Context
 import android.util.Log
+import android.view.inputmethod.InputMethodManager
+import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.combinedClickable
@@ -86,9 +88,14 @@ import androidx.compose.material3.FilterChip
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
+import androidx.compose.ui.draw.scale
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalView
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class,
     ExperimentalFoundationApi::class
@@ -109,12 +116,16 @@ fun AddProductScreen(
     var tempImageUri by remember { mutableStateOf<Uri?>(null) }
     var showErrorDialog by remember { mutableStateOf(false) }
     var errorMessage by remember { mutableStateOf("") }
-
+    val view = LocalView.current
 
     var selectedCategorias by remember { mutableStateOf<Set<String>>(emptySet()) }
     var showCategoriasMenu by remember { mutableStateOf(false) }
     var showNewCategoryDialog by remember { mutableStateOf(false) }
     val categorias by viewModel.categorias.collectAsState()
+    var showSuccessDialog by remember { mutableStateOf(false) }
+    var shouldNavigateBack by remember { mutableStateOf(false) }
+    // Estado para la animación del botón
+    var isButtonPressed by remember { mutableStateOf(false) }
 
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -142,6 +153,7 @@ fun AddProductScreen(
         }
     }
 
+
     // Para permisos de cámara
     val permissionLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestPermission()
@@ -161,6 +173,29 @@ fun AddProductScreen(
             nombresSimilares = emptyList()
         }
     }
+
+    // Diálogo de éxito
+    if (showSuccessDialog) {
+        AlertDialog(
+            onDismissRequest = {
+                showSuccessDialog = false
+                if (shouldNavigateBack) onNavigateBack()
+            },
+            title = { Text("Éxito") },
+            text = { Text("Producto guardado. La imagen se subirá en segundo plano.") },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        showSuccessDialog = false
+                        if (shouldNavigateBack) onNavigateBack()
+                    }
+                ) {
+                    Text("OK")
+                }
+            }
+        )
+    }
+
     // Diálogo de error
     if (showErrorDialog) {
         AlertDialog(
@@ -349,7 +384,17 @@ fun AddProductScreen(
                         OutlinedCard(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .clickable { showCategoriasMenu = true }
+                                .clickable {
+                                    // Cerrar el teclado antes de abrir el menú
+                                    val inputMethodManager = context.getSystemService(Context.INPUT_METHOD_SERVICE) as InputMethodManager
+                                    inputMethodManager.hideSoftInputFromWindow(view.windowToken, 0)
+
+                                    // Pequeña pausa antes de abrir el menú
+                                    scope.launch {
+                                        delay(100)
+                                        showCategoriasMenu = true
+                                    }
+                                }
                         ) {
                             Column(
                                 modifier = Modifier.padding(16.dp)
@@ -612,7 +657,6 @@ fun AddProductScreen(
 
                 Spacer(modifier = Modifier.height(80.dp))
         }
-            // Botón flotante en la parte inferior
             Box(
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
@@ -622,54 +666,42 @@ fun AddProductScreen(
             ) {
                 Button(
                     onClick = {
-                        if (nombre.isBlank() || precio.isBlank()) {
-                            errorMessage = "Por favor completa todos los campos requeridos"
-                            showErrorDialog = true
-                            return@Button
-                        }
+                        if (nombre.isBlank() || precio.isBlank()) return@Button
 
-                        val precioDouble = precio.toDoubleOrNull()
-                        if (precioDouble == null) {
-                            errorMessage = "Por favor ingresa un precio válido"
-                            showErrorDialog = true
-                            return@Button
-                        }
+                        val precioDouble = precio.toDoubleOrNull() ?: return@Button
 
-                        isLoading = true
-                        scope.launch {
-                            try {
-                                viewModel.agregarProducto(
-                                    nombre = nombre,
-                                    precio = precioDouble,
-                                    descripcion = descripcion,
-                                    categorias = selectedCategorias.toList(),
-                                    imageUri = imageUri,
-                                    context = context
-                                ).onSuccess {
-                                    onNavigateBack()
-                                }.onFailure { error ->
-                                    errorMessage = error.message ?: "Error al guardar el producto"
-                                    showErrorDialog = true
-                                }
-                            } finally {
-                                isLoading = false
+                        // Activar animación
+                        isButtonPressed = true
+
+                        scope.launch(Dispatchers.IO) {
+                            viewModel.agregarProducto(
+                                nombre = nombre,
+                                precio = precioDouble,
+                                descripcion = descripcion,
+                                categorias = selectedCategorias.toList(),
+                                imageUri = imageUri,
+                                context = context
+                            )
+                            // Navegar inmediatamente después de guardar los datos básicos
+                            withContext(Dispatchers.Main) {
+                                onNavigateBack()
                             }
                         }
                     },
-                    modifier = Modifier.fillMaxWidth(),
-                    enabled = !isLoading,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .scale(if (isButtonPressed) 0.95f else 1f)
+                        .animateContentSize(),
                     colors = ButtonDefaults.buttonColors(
                         containerColor = MaterialTheme.colorScheme.primary
                     )
                 ) {
-                    if (isLoading) {
+                    if (isButtonPressed) {
                         CircularProgressIndicator(
                             modifier = Modifier.size(24.dp),
                             color = MaterialTheme.colorScheme.onPrimary
                         )
                     } else {
-                        Icon(Icons.Default.Done, contentDescription = null)
-                        Spacer(modifier = Modifier.width(8.dp))
                         Text("Guardar Producto")
                     }
                 }

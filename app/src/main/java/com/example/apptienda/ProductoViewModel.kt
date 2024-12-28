@@ -7,10 +7,12 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.Query
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
+import kotlinx.coroutines.withContext
 import java.util.UUID
 @Keep
 class ProductoViewModel(
@@ -23,6 +25,10 @@ class ProductoViewModel(
 
     private val _categorias = MutableStateFlow<List<Categoria>>(emptyList())
     val categorias: StateFlow<List<Categoria>> = _categorias
+
+    // Nuevo StateFlow para rastrear las cargas de imágenes pendientes
+    private val _pendingUploads = MutableStateFlow<Map<String, Boolean>>(emptyMap())
+    val pendingUploads: StateFlow<Map<String, Boolean>> = _pendingUploads
 
     init {
         cargarCategorias()
@@ -120,33 +126,55 @@ class ProductoViewModel(
         categorias: List<String>,
         imageUri: Uri?,
         context: Context
-    ): Result<Unit> {
+    ): Result<String> {
         return try {
-            val idNumerico = obtenerSiguienteId()
+            // Obtener ID en segundo plano
+            val idNumerico = withContext(Dispatchers.IO) {
+                obtenerSiguienteId()
+            }
 
-            val imageUrl = imageUri?.let { uri ->
-                cloudinaryRepository.uploadImage(uri, context)
-            } ?: ""
-
+            // Crear el producto sin imagen inicialmente
             val producto = Producto(
                 idNumerico = idNumerico,
                 nombre = nombre,
                 precio = precio,
                 descripcion = descripcion,
-                imageUrl = imageUrl,
+                imageUrl = "",
                 categorias = categorias
             )
 
-            db.collection("productos")
-                .add(producto)
-                .await()
+            // Guardar el producto en segundo plano
+            val docRef = withContext(Dispatchers.IO) {
+                db.collection("productos")
+                    .add(producto)
+                    .await()
+            }
 
-            Result.success(Unit)
+            // Si hay imagen, iniciar carga en segundo plano
+            imageUri?.let { uri ->
+                viewModelScope.launch(Dispatchers.IO) {
+                    try {
+                        val imageUrl = cloudinaryRepository.uploadImage(uri, context)
+                        db.collection("productos")
+                            .document(docRef.id)
+                            .update("imageUrl", imageUrl)
+                            .await()
+                    } catch (e: Exception) {
+                        // Manejar error de carga de imagen
+                        e.printStackTrace()
+                    }
+                }
+            }
+
+            Result.success(docRef.id)
         } catch (e: Exception) {
             Result.failure(e)
         }
     }
-
+    // Función para verificar si hay cargas pendientes
+    fun hasPendingUploads(): Boolean {
+        return _pendingUploads.value.isNotEmpty()
+    }
     // Esta función se mantiene igual
     suspend fun eliminarProducto(productoId: String): Result<Unit> {
         return try {
