@@ -28,6 +28,7 @@ import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
@@ -71,6 +72,7 @@ fun ProductListScreen(
     }
 
     Scaffold(
+
         topBar = {
             TopAppBar(
                 title = { Text("Catálogo de Productos") },
@@ -115,17 +117,23 @@ fun ProductListScreen(
         Column(
             modifier = Modifier
                 .fillMaxSize()
+
                 .padding(paddingValues)
+
         ) {
             SearchBar(
+                windowInsets = WindowInsets(top = 0.dp),
                 query = searchQuery,
                 onQueryChange = { searchQuery = it },
                 onSearch = { },
                 active = false,
                 onActiveChange = { },
+
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(16.dp),
+
+
+                    .padding(horizontal = 16.dp, vertical = 1.dp),
                 placeholder = { Text("Buscar productos...") },
                 leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
                 trailingIcon = {
@@ -297,10 +305,12 @@ fun ProductCard(
                                 .crossfade(true)
                                 .build(),
                             contentDescription = producto.nombre,
-                            modifier = Modifier.fillMaxSize().combinedClickable(
-                                onClick = { },
-                                onLongClick = { showImagePreview = true }
-                            ),
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .combinedClickable(
+                                    onClick = { },
+                                    onLongClick = { showImagePreview = true }
+                                ),
                             contentScale = ContentScale.Crop
                         )
                     }

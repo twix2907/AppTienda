@@ -6,45 +6,17 @@ import android.net.Uri
 import android.util.Log
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.Create
-import androidx.compose.material.icons.filled.Done
-import androidx.compose.material.icons.filled.Face
-import androidx.compose.material.icons.filled.Info
-import androidx.compose.material.icons.filled.ShoppingCart
-import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Button
-import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedCard
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
-import androidx.compose.material3.TopAppBar
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.runtime.setValue
+import androidx.compose.material.icons.filled.*
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.layout.ContentScale
@@ -55,8 +27,10 @@ import coil3.compose.AsyncImage
 import coil3.request.ImageRequest
 import coil3.request.crossfade
 import kotlinx.coroutines.launch
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
 fun EditProductScreen(
     productId: String,
@@ -72,9 +46,19 @@ fun EditProductScreen(
     var isLoading by remember { mutableStateOf(false) }
     var showPreview by remember { mutableStateOf(false) }
     var tempImageUri by remember { mutableStateOf<Uri?>(null) }
-    val scope = rememberCoroutineScope()
-    val context = LocalContext.current
+    var showErrorDialog by remember { mutableStateOf(false) }
+    var errorMessage by remember { mutableStateOf("") }
 
+    // Estados para categorías
+    var selectedCategorias by remember {
+        mutableStateOf<Set<String>>(producto?.categorias?.toSet() ?: emptySet())
+    }
+    var showCategoriasMenu by remember { mutableStateOf(false) }
+    var showNewCategoryDialog by remember { mutableStateOf(false) }
+    val categorias by viewModel.categorias.collectAsState()
+
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
     // Para seleccionar de galería
     val galleryLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.GetContent()
@@ -158,6 +142,61 @@ fun EditProductScreen(
         )
     }
 
+    // Diálogo para nueva categoría
+    if (showNewCategoryDialog) {
+        var nuevaCategoria by remember { mutableStateOf("") }
+        var descripcionCategoria by remember { mutableStateOf("") }
+
+        AlertDialog(
+            onDismissRequest = { showNewCategoryDialog = false },
+            title = { Text("Nueva categoría") },
+            text = {
+                Column(
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    OutlinedTextField(
+                        value = nuevaCategoria,
+                        onValueChange = { nuevaCategoria = it },
+                        label = { Text("Nombre de la categoría") },
+                        singleLine = true
+                    )
+                    OutlinedTextField(
+                        value = descripcionCategoria,
+                        onValueChange = { descripcionCategoria = it },
+                        label = { Text("Descripción (opcional)") },
+                        singleLine = true
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        if (nuevaCategoria.isNotBlank()) {
+                            scope.launch {
+                                viewModel.agregarCategoria(
+                                    nombre = nuevaCategoria,
+                                    descripcion = descripcionCategoria
+                                ).onSuccess { categoriaId ->
+                                    selectedCategorias = selectedCategorias + categoriaId
+                                    showNewCategoryDialog = false
+                                }.onFailure { error ->
+                                    errorMessage = error.message ?: "Error al crear la categoría"
+                                    showErrorDialog = true
+                                }
+                            }
+                        }
+                    }
+                ) {
+                    Text("Guardar")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showNewCategoryDialog = false }) {
+                    Text("Cancelar")
+                }
+            }
+        )
+    }
     Scaffold(
         topBar = {
             TopAppBar(
@@ -166,165 +205,303 @@ fun EditProductScreen(
                     IconButton(onClick = onNavigateBack) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Regresar")
                     }
-                }
+                },
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = MaterialTheme.colorScheme.primaryContainer,
+                    titleContentColor = MaterialTheme.colorScheme.onPrimaryContainer
+                )
             )
         }
     ) { padding ->
-        Column(
+        Box(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(padding)
-                .padding(16.dp)
         ) {
-            OutlinedCard(
-                modifier = Modifier.fillMaxWidth(),
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .verticalScroll(rememberScrollState())
+                    .padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(16.dp),
-                    verticalArrangement = Arrangement.spacedBy(16.dp)
+                OutlinedCard(
+                    modifier = Modifier.fillMaxWidth(),
                 ) {
-                    OutlinedTextField(
-                        value = nombre,
-                        onValueChange = { nombre = it },
-                        label = { Text("Nombre del producto") },
-                        modifier = Modifier.fillMaxWidth(),
-                        singleLine = true,
-                        leadingIcon = {
-                            Icon(Icons.Default.Create, contentDescription = null)
-                        }
-                    )
-
-                    OutlinedTextField(
-                        value = descripcion,
-                        onValueChange = { descripcion = it },
-                        label = { Text("Descripción") },
-                        modifier = Modifier.fillMaxWidth(),
-                        minLines = 3,
-                        maxLines = 5,
-                        leadingIcon = {
-                            Icon(Icons.Default.Info, contentDescription = null)
-                        }
-                    )
-
-                    OutlinedTextField(
-                        value = precio,
-                        onValueChange = { precio = it },
-                        label = { Text("Precio") },
-                        modifier = Modifier.fillMaxWidth(),
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
-                        singleLine = true,
-                        leadingIcon = {
-                            Icon(Icons.Default.ShoppingCart, contentDescription = null)
-                        },
-                        prefix = { Text("$") }
-                    )
-
-                    OutlinedCard(
+                    Column(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .height(200.dp)
-                            .clickable { showImageDialog = true }
+                            .padding(16.dp),
+                        verticalArrangement = Arrangement.spacedBy(16.dp)
                     ) {
+                        // Campo de nombre
+                        OutlinedTextField(
+                            value = nombre,
+                            onValueChange = { nombre = it },
+                            label = { Text("Nombre del producto") },
+                            modifier = Modifier.fillMaxWidth(),
+                            singleLine = true,
+                            leadingIcon = {
+                                Icon(Icons.Default.Create, contentDescription = null)
+                            }
+                        )
+
+                        // Campo de descripción
+                        OutlinedTextField(
+                            value = descripcion,
+                            onValueChange = { descripcion = it },
+                            label = { Text("Descripción") },
+                            modifier = Modifier.fillMaxWidth(),
+                            minLines = 3,
+                            maxLines = 5,
+                            leadingIcon = {
+                                Icon(Icons.Default.Info, contentDescription = null)
+                            }
+                        )
+
+                        // Campo de precio
+                        OutlinedTextField(
+                            value = precio,
+                            onValueChange = { precio = it },
+                            label = { Text("Precio") },
+                            modifier = Modifier.fillMaxWidth(),
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                            singleLine = true,
+                            leadingIcon = {
+                                Icon(Icons.Default.ShoppingCart, contentDescription = null)
+                            },
+                            prefix = { Text("$") }
+                        )
+
+                        // Selector de categorías
                         Box(
-                            modifier = Modifier.fillMaxSize(),
-                            contentAlignment = Alignment.Center
+                            modifier = Modifier.fillMaxWidth()
                         ) {
-                            if (showPreview && imageUri != null) {
-                                AsyncImage(
-                                    model = ImageRequest.Builder(context)
-                                        .data(imageUri)
-                                        .crossfade(true)
-                                        .build(),
-                                    contentDescription = "Imagen seleccionada",
-                                    modifier = Modifier.fillMaxSize(),
-                                    contentScale = ContentScale.Crop
-                                )
-                            } else if (producto?.imageUrl != null) {
-                                AsyncImage(
-                                    model = ImageRequest.Builder(context)
-                                        .data(producto.imageUrl.replace("http://", "https://"))
-                                        .crossfade(true)
-                                        .build(),
-                                    contentDescription = "Imagen actual",
-                                    modifier = Modifier.fillMaxSize(),
-                                    contentScale = ContentScale.Crop
-                                )
-                            } else {
+                            OutlinedCard(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable { showCategoriasMenu = true }
+                            ) {
                                 Column(
-                                    horizontalAlignment = Alignment.CenterHorizontally,
-                                    verticalArrangement = Arrangement.Center
+                                    modifier = Modifier.padding(16.dp)
                                 ) {
-                                    Icon(
-                                        Icons.Default.ShoppingCart,
-                                        contentDescription = null,
-                                        modifier = Modifier.size(48.dp),
-                                        tint = MaterialTheme.colorScheme.primary
-                                    )
-                                    Spacer(modifier = Modifier.height(8.dp))
                                     Text(
-                                        "Toca para agregar imagen",
-                                        style = MaterialTheme.typography.bodyMedium,
-                                        color = MaterialTheme.colorScheme.primary
+                                        text = "Categorías",
+                                        style = MaterialTheme.typography.labelMedium
                                     )
+
+                                    if (selectedCategorias.isEmpty()) {
+                                        Text(
+                                            text = "Selecciona categorías",
+                                            style = MaterialTheme.typography.bodyMedium,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                    } else {
+                                        FlowRow(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                        ) {
+                                            selectedCategorias.forEach { categoriaId ->
+                                                categorias.find { it.id == categoriaId }?.let { categoria ->
+                                                    FilterChip(
+                                                        selected = true,
+                                                        onClick = {
+                                                            selectedCategorias = selectedCategorias - categoriaId
+                                                        },
+                                                        label = { Text(categoria.nombre) },
+                                                        trailingIcon = {
+                                                            Icon(
+                                                                Icons.Default.Close,
+                                                                contentDescription = "Eliminar"
+                                                            )
+                                                        }
+                                                    )
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+
+                            DropdownMenu(
+                                expanded = showCategoriasMenu,
+                                onDismissRequest = { showCategoriasMenu = false },
+                                modifier = Modifier.fillMaxWidth(0.9f)
+                            ) {
+                                categorias.forEach { categoria ->
+                                    DropdownMenuItem(
+                                        text = {
+                                            Text(
+                                                text = categoria.nombre,
+                                                color = if (selectedCategorias.contains(categoria.id)) {
+                                                    MaterialTheme.colorScheme.primary
+                                                } else {
+                                                    MaterialTheme.colorScheme.onSurface
+                                                }
+                                            )
+                                        },
+                                        onClick = {
+                                            selectedCategorias = if (selectedCategorias.contains(categoria.id)) {
+                                                selectedCategorias - categoria.id
+                                            } else {
+                                                selectedCategorias + categoria.id
+                                            }
+                                        },
+                                        leadingIcon = {
+                                            if (selectedCategorias.contains(categoria.id)) {
+                                                Icon(
+                                                    imageVector = Icons.Default.Done,
+                                                    contentDescription = null,
+                                                    tint = MaterialTheme.colorScheme.primary
+                                                )
+                                            }
+                                        },
+                                        modifier = Modifier.background(
+                                            if (selectedCategorias.contains(categoria.id)) {
+                                                MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.1f)
+                                            } else {
+                                                MaterialTheme.colorScheme.surface
+                                            }
+                                        )
+                                    )
+                                }
+
+                                Divider(modifier = Modifier.padding(vertical = 4.dp))
+
+                                DropdownMenuItem(
+                                    text = { Text("Agregar nueva categoría") },
+                                    onClick = {
+                                        showCategoriasMenu = false
+                                        showNewCategoryDialog = true
+                                    },
+                                    leadingIcon = {
+                                        Icon(
+                                            Icons.Default.Add,
+                                            contentDescription = null,
+                                            tint = MaterialTheme.colorScheme.primary
+                                        )
+                                    }
+                                )
+                            }
+                        }
+                        // Campo de imagen
+                        OutlinedCard(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(200.dp)
+                                .clickable { showImageDialog = true }
+                        ) {
+                            Box(
+                                modifier = Modifier.fillMaxSize(),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                if (showPreview && imageUri != null) {
+                                    AsyncImage(
+                                        model = ImageRequest.Builder(context)
+                                            .data(imageUri)
+                                            .crossfade(true)
+                                            .build(),
+                                        contentDescription = "Imagen seleccionada",
+                                        modifier = Modifier.fillMaxSize(),
+                                        contentScale = ContentScale.Crop
+                                    )
+                                } else if (producto?.imageUrl != null) {
+                                    AsyncImage(
+                                        model = ImageRequest.Builder(context)
+                                            .data(producto.imageUrl.replace("http://", "https://"))
+                                            .crossfade(true)
+                                            .build(),
+                                        contentDescription = "Imagen actual",
+                                        modifier = Modifier.fillMaxSize(),
+                                        contentScale = ContentScale.Crop
+                                    )
+                                } else {
+                                    Column(
+                                        horizontalAlignment = Alignment.CenterHorizontally,
+                                        verticalArrangement = Arrangement.Center
+                                    ) {
+                                        Icon(
+                                            Icons.Default.ShoppingCart,
+                                            contentDescription = null,
+                                            modifier = Modifier.size(48.dp),
+                                            tint = MaterialTheme.colorScheme.primary
+                                        )
+                                        Spacer(modifier = Modifier.height(8.dp))
+                                        Text(
+                                            "Toca para agregar imagen",
+                                            style = MaterialTheme.typography.bodyMedium,
+                                            color = MaterialTheme.colorScheme.primary
+                                        )
+                                    }
                                 }
                             }
                         }
                     }
                 }
+
+                Spacer(modifier = Modifier.height(80.dp))
             }
-            Spacer(modifier = Modifier.height(16.dp))
 
-            Button(
-                onClick = {
-                    scope.launch {
-                        isLoading = true
-                        try {
-                            if (nombre.isBlank() || precio.isBlank()) {
-                                // Mostrar error
-                                return@launch
-                            }
-
-                            val precioDouble = precio.toDoubleOrNull()
-                            if (precioDouble == null) {
-                                // Mostrar error de precio inválido
-                                return@launch
-                            }
-
-                            viewModel.actualizarProducto(
-                                Producto(
-                                    id = productId,
-                                    nombre = nombre,
-                                    descripcion = descripcion,
-                                    precio = precioDouble,
-                                    imageUrl = producto?.imageUrl ?: ""
-                                ),
-                                imageUri,
-                                context
-                            ).onSuccess {
-                                onNavigateBack()
-                            }.onFailure { error ->
-                                // Mostrar error
-                            }
-                        } finally {
-                            isLoading = false
-                        }
-                    }
-                },
-                modifier = Modifier.fillMaxWidth(),
-                enabled = !isLoading
+            // Botón fijo en la parte inferior
+            Box(
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .fillMaxWidth()
+                    .background(MaterialTheme.colorScheme.surface)
+                    .padding(16.dp)
             ) {
-                if (isLoading) {
-                    CircularProgressIndicator(
-                        modifier = Modifier.size(24.dp),
-                        color = MaterialTheme.colorScheme.onPrimary
+                Button(
+                    onClick = {
+                        scope.launch {
+                            isLoading = true
+                            try {
+                                if (nombre.isBlank() || precio.isBlank()) {
+                                    errorMessage = "Por favor completa todos los campos requeridos"
+                                    showErrorDialog = true
+                                    return@launch
+                                }
+
+                                val precioDouble = precio.toDoubleOrNull()
+                                if (precioDouble == null) {
+                                    errorMessage = "Por favor ingresa un precio válido"
+                                    showErrorDialog = true
+                                    return@launch
+                                }
+
+                                viewModel.actualizarProducto(
+                                    Producto(
+                                        id = productId,
+                                        nombre = nombre,
+                                        descripcion = descripcion,
+                                        precio = precioDouble,
+                                        imageUrl = producto?.imageUrl ?: "",
+                                        categorias = selectedCategorias.toList()
+                                    ),
+                                    imageUri,
+                                    context
+                                ).onSuccess {
+                                    onNavigateBack()
+                                }.onFailure { error ->
+                                    errorMessage = error.message ?: "Error al actualizar el producto"
+                                    showErrorDialog = true
+                                }
+                            } finally {
+                                isLoading = false
+                            }
+                        }
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                    enabled = !isLoading,
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = MaterialTheme.colorScheme.primary
                     )
-                } else {
-                    Row(
-                        horizontalArrangement = Arrangement.Center,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
+                ) {
+                    if (isLoading) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(24.dp),
+                            color = MaterialTheme.colorScheme.onPrimary
+                        )
+                    } else {
                         Icon(Icons.Default.Done, contentDescription = null)
                         Spacer(modifier = Modifier.width(8.dp))
                         Text("Guardar cambios")
@@ -334,10 +511,7 @@ fun EditProductScreen(
         }
     }
 
-    // Diálogo de error si es necesario
-    var showErrorDialog by remember { mutableStateOf(false) }
-    var errorMessage by remember { mutableStateOf("") }
-
+    // Diálogo de error
     if (showErrorDialog) {
         AlertDialog(
             onDismissRequest = { showErrorDialog = false },
