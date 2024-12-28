@@ -16,6 +16,8 @@ dependencyResolutionManagement {
     repositories {
         google()
         mavenCentral()
+        // Agregar el repositorio de Cloudinary
+        maven { url = uri("https://jitpack.io") }
     }
 }
 

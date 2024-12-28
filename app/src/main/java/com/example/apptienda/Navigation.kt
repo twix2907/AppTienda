@@ -1,15 +1,17 @@
 package com.example.apptienda
+
 import androidx.compose.runtime.Composable
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
-import androidx.navigation.compose.navigation
+
 sealed class Screen(val route: String) {
     object ProductList : Screen("productList")
     object AddProduct : Screen("addProduct")
 }
+
 @Composable
-fun AppNavigation() {
+fun AppNavigation(viewModel: ProductoViewModel) {  // Agregamos el parámetro viewModel
     val navController = rememberNavController()
 
     NavHost(
@@ -18,6 +20,7 @@ fun AppNavigation() {
     ) {
         composable(Screen.ProductList.route) {
             ProductListScreen(
+                viewModel = viewModel,  // Pasamos el viewModel
                 onNavigateToAddProduct = {
                     navController.navigate(Screen.AddProduct.route)
                 }
@@ -25,6 +28,7 @@ fun AppNavigation() {
         }
         composable(Screen.AddProduct.route) {
             AddProductScreen(
+                viewModel = viewModel,  // Pasamos el viewModel
                 onNavigateBack = {
                     navController.popBackStack()
                 }

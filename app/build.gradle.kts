@@ -53,13 +53,19 @@ android {
 dependencies {
 
     implementation(libs.firebase.firestore)
-    implementation(libs.firebase.storage)
+
     val nav_version = "2.8.4"
 
     // Jetpack Compose integration
     implementation("androidx.navigation:navigation-compose:$nav_version")
 
+    //cloudinary
+    // Cloudinary - con exclusiones específicas
+    implementation("com.cloudinary:cloudinary-android:2.3.1")
+    // Para manejar la subida de archivos
+    implementation("com.squareup.okhttp3:okhttp:4.12.0")
     //coil
+    implementation("io.coil-kt.coil3:coil-network-okhttp:3.0.0")
     implementation("io.coil-kt.coil3:coil-compose:3.0.4")
     //viewmodel
     implementation ("androidx.lifecycle:lifecycle-runtime-ktx:2.6.2")

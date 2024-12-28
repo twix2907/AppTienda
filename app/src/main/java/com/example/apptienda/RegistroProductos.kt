@@ -19,22 +19,17 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.AccountBox
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Create
 import androidx.compose.material.icons.filled.Done
 import androidx.compose.material.icons.filled.Face
 import androidx.compose.material.icons.filled.Info
-import androidx.compose.material.icons.filled.List
 import androidx.compose.material.icons.filled.ShoppingCart
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.Card
-import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.ExposedDropdownMenuBox
-import androidx.compose.material3.ExposedDropdownMenuDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -49,6 +44,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -57,7 +53,9 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.core.content.FileProvider
-import coil3.compose.rememberAsyncImagePainter
+import coil3.compose.AsyncImage
+import coil3.request.ImageRequest
+import coil3.request.crossfade
 import java.io.File
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -65,38 +63,36 @@ import java.util.Locale
 import android.Manifest.permission.CAMERA
 import android.content.Context
 import android.util.Log
-import androidx.compose.material3.CircularProgressIndicator
-import coil3.compose.AsyncImage
-import coil3.request.ImageRequest
-import coil3.request.crossfade
+import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun AddProductScreen(onNavigateBack: () -> Unit) {
-    var name by remember { mutableStateOf("") }
-    var description by remember { mutableStateOf("") }
-
-    var price by remember { mutableStateOf("") }
-    var category by remember { mutableStateOf("") }
-    var expanded by remember { mutableStateOf(false) }
+fun AddProductScreen(
+    viewModel: ProductoViewModel,
+    onNavigateBack: () -> Unit
+) {
+    var nombre by remember { mutableStateOf("") }
+    var descripcion by remember { mutableStateOf("") }
+    var precio by remember { mutableStateOf("") }
     var imageUri by remember { mutableStateOf<Uri?>(null) }
     var showImageDialog by remember { mutableStateOf(false) }
-    val categories = listOf("Electrónicos", "Computadoras", "Accesorios", "Móviles")
-    val context = LocalContext.current
-    val contentResolver = context.contentResolver
     var isLoading by remember { mutableStateOf(false) }
-
     var showPreview by remember { mutableStateOf(false) }
     var tempImageUri by remember { mutableStateOf<Uri?>(null) }
+    var showErrorDialog by remember { mutableStateOf(false) }
+    var errorMessage by remember { mutableStateOf("") }
+
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
 
     // Para seleccionar de galería
     val galleryLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.GetContent()
     ) { uri: Uri? ->
         imageUri = uri
+        showPreview = true
     }
 
-    // Para tomar foto
     // Para tomar foto
     val cameraLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.TakePicture()
@@ -118,12 +114,26 @@ fun AddProductScreen(onNavigateBack: () -> Unit) {
     ) { isGranted: Boolean ->
         if (isGranted) {
             val uri = createImageFileUri(context)
-            imageUri = uri // Guardamos la URI antes de lanzar la cámara
+            tempImageUri = uri
             cameraLauncher.launch(uri)
         }
     }
 
+    // Diálogo de error
+    if (showErrorDialog) {
+        AlertDialog(
+            onDismissRequest = { showErrorDialog = false },
+            title = { Text("Error") },
+            text = { Text(errorMessage) },
+            confirmButton = {
+                TextButton(onClick = { showErrorDialog = false }) {
+                    Text("OK")
+                }
+            }
+        )
+    }
 
+    // Diálogo de selección de imagen
     if (showImageDialog) {
         AlertDialog(
             onDismissRequest = { showImageDialog = false },
@@ -146,7 +156,7 @@ fun AddProductScreen(onNavigateBack: () -> Unit) {
                             showImageDialog = false
                             when (PackageManager.PERMISSION_GRANTED) {
                                 context.checkSelfPermission(CAMERA) -> {
-                                    showPreview = false // Asegúrate de que la vista previa no se muestre
+                                    showPreview = false
                                     tempImageUri = createImageFileUri(context)
                                     cameraLauncher.launch(tempImageUri!!)
                                 }
@@ -206,8 +216,8 @@ fun AddProductScreen(onNavigateBack: () -> Unit) {
                 ) {
                     // Campo de nombre
                     OutlinedTextField(
-                        value = name,
-                        onValueChange = { name = it },
+                        value = nombre,
+                        onValueChange = { nombre = it },
                         label = { Text("Nombre del producto") },
                         modifier = Modifier.fillMaxWidth(),
                         singleLine = true,
@@ -218,8 +228,8 @@ fun AddProductScreen(onNavigateBack: () -> Unit) {
 
                     // Campo de descripción
                     OutlinedTextField(
-                        value = description,
-                        onValueChange = { description = it },
+                        value = descripcion,
+                        onValueChange = { descripcion = it },
                         label = { Text("Descripción") },
                         modifier = Modifier.fillMaxWidth(),
                         minLines = 3,
@@ -229,46 +239,10 @@ fun AddProductScreen(onNavigateBack: () -> Unit) {
                         }
                     )
 
-                    // Selector de categoría
-                    ExposedDropdownMenuBox(
-                        expanded = expanded,
-                        onExpandedChange = { expanded = !expanded }
-                    ) {
-                        OutlinedTextField(
-                            value = category,
-                            onValueChange = {},
-                            readOnly = true,
-                            label = { Text("Categoría") },
-                            trailingIcon = {
-                                ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded)
-                            },
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .menuAnchor(),
-                            leadingIcon = {
-                                Icon(Icons.Default.List, contentDescription = null)
-                            }
-                        )
-                        ExposedDropdownMenu(
-                            expanded = expanded,
-                            onDismissRequest = { expanded = false }
-                        ) {
-                            categories.forEach { option ->
-                                DropdownMenuItem(
-                                    text = { Text(option) },
-                                    onClick = {
-                                        category = option
-                                        expanded = false
-                                    }
-                                )
-                            }
-                        }
-                    }
-
                     // Campo de precio
                     OutlinedTextField(
-                        value = price,
-                        onValueChange = { price = it },
+                        value = precio,
+                        onValueChange = { precio = it },
                         label = { Text("Precio") },
                         modifier = Modifier.fillMaxWidth(),
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
@@ -333,28 +307,64 @@ fun AddProductScreen(onNavigateBack: () -> Unit) {
                             }
                         }
                     }
+                }
             }
-
-
 
             // Botón de guardar
             Button(
                 onClick = {
-                    // Aquí iría la lógica para guardar el producto
-                    onNavigateBack()
+                    if (nombre.isBlank() || precio.isBlank()) {
+                        errorMessage = "Por favor completa todos los campos requeridos"
+                        showErrorDialog = true
+                        return@Button
+                    }
+
+                    val precioDouble = precio.toDoubleOrNull()
+                    if (precioDouble == null) {
+                        errorMessage = "Por favor ingresa un precio válido"
+                        showErrorDialog = true
+                        return@Button
+                    }
+
+                    isLoading = true
+                    scope.launch {
+                        try {
+                            viewModel.agregarProducto(
+                                nombre = nombre,
+                                precio = precioDouble,
+                                descripcion = descripcion,
+                                imageUri = imageUri,
+                                context = context
+                            ).onSuccess {
+                                onNavigateBack()
+                            }.onFailure { error ->
+                                errorMessage = error.message ?: "Error al guardar el producto"
+                                showErrorDialog = true
+                            }
+                        } finally {
+                            isLoading = false
+                        }
+                    }
                 },
                 modifier = Modifier.fillMaxWidth(),
+                enabled = !isLoading,
                 colors = ButtonDefaults.buttonColors(
                     containerColor = MaterialTheme.colorScheme.primary
                 )
             ) {
-                Icon(Icons.Default.Done, contentDescription = null)
-                Spacer(modifier = Modifier.width(8.dp))
-                Text("Guardar Producto")
+                if (isLoading) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(24.dp),
+                        color = MaterialTheme.colorScheme.onPrimary
+                    )
+                } else {
+                    Icon(Icons.Default.Done, contentDescription = null)
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("Guardar Producto")
+                }
             }
         }
     }
-}
 }
 
 // Función auxiliar para crear el archivo de imagen
@@ -367,7 +377,6 @@ fun createImageFileUri(context: Context): Uri {
         ".jpg",
         storageDir
     ).apply {
-        // Guarda la ruta del archivo para uso posterior
         Log.d("FileCreation", "Created file at: $absolutePath")
     }
     return FileProvider.getUriForFile(

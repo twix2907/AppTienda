@@ -1,44 +1,61 @@
 package com.example.apptienda
 
+
+import android.util.Log
+import androidx.compose.ui.platform.LocalContext
+import coil3.compose.AsyncImage
+import coil3.request.ImageRequest
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Clear
-import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import coil3.compose.rememberAsyncImagePainter
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
-import androidx.compose.material.icons.filled.Add
 import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.material.icons.filled.Menu
-import androidx.compose.material.icons.filled.List
-import androidx.compose.material.icons.filled.MoreVert
-import androidx.compose.material.icons.filled.KeyboardArrowDown
+import coil3.request.crossfade
+import kotlinx.coroutines.launch
 
-data class Product(
-    val name: String,
-    val description: String,
-    val category: String,
-    val price: Double,
-    val imageUrl: String
-)
+
+
+@Composable
+fun ImageLoadingPlaceholder() {
+    Box(
+        modifier = Modifier.fillMaxSize(),
+        contentAlignment = Alignment.Center
+    ) {
+        CircularProgressIndicator(
+            color = MaterialTheme.colorScheme.primary,
+            modifier = Modifier.size(24.dp)
+        )
+    }
+}
+
+@Composable
+fun ImageErrorPlaceholder() {
+    Box(
+        modifier = Modifier.fillMaxSize(),
+        contentAlignment = Alignment.Center
+    ) {
+        Icon(
+            imageVector = Icons.Default.AccountBox,
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.error
+        )
+    }
+}
 // Enum para los tipos de vista
 enum class ViewType {
     DETAILED,    // Vista detallada original
@@ -46,41 +63,29 @@ enum class ViewType {
     COMPACT,     // Vista compacta con imagen
     SIMPLE       // Vista simple sin imagen
 }
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun ProductListScreen(onNavigateToAddProduct: () -> Unit) {
+fun ProductListScreen(
+    viewModel: ProductoViewModel,
+    onNavigateToAddProduct: () -> Unit
+) {
     var searchQuery by remember { mutableStateOf("") }
     var selectedCategory by remember { mutableStateOf<String?>(null) }
-
     var currentViewType by remember { mutableStateOf(ViewType.DETAILED) }
+    val scope = rememberCoroutineScope()
+
+    // Obtener productos del ViewModel
+    val productos by viewModel.productos.collectAsState()
 
     // Lista de categorías disponibles
     val categories = listOf("Todos", "Electrónicos", "Computadoras", "Accesorios", "Móviles")
 
-    val products = listOf(
-        Product(
-            "Smartphone XYZ",
-            "Un teléfono inteligente de última generación con características increíbles",
-            "Electrónicos",
-            999.99,
-            "url_imagen_1"
-        ),
-        Product(
-            "Laptop Pro",
-            "Laptop profesional con gran rendimiento",
-            "Computadoras",
-            1499.99,
-            "url_imagen_2"
-        ),
-        // Más productos...
-    )
-
-    // Filtrar productos basado en la búsqueda y categoría
-    val filteredProducts = products.filter { product ->
-        val matchesSearch = product.name.contains(searchQuery, ignoreCase = true) ||
-                product.description.contains(searchQuery, ignoreCase = true)
-        val matchesCategory = selectedCategory == null || selectedCategory == "Todos" ||
-                product.category == selectedCategory
+    // Filtrar productos
+    val filteredProducts = productos.filter { producto ->
+        val matchesSearch = producto.nombre.contains(searchQuery, ignoreCase = true) ||
+                producto.descripcion.contains(searchQuery, ignoreCase = true)
+        val matchesCategory = selectedCategory == null || selectedCategory == "Todos"
         matchesSearch && matchesCategory
     }
 
@@ -89,7 +94,6 @@ fun ProductListScreen(onNavigateToAddProduct: () -> Unit) {
             TopAppBar(
                 title = { Text("Catálogo de Productos") },
                 actions = {
-                    // Botón para cambiar el tipo de vista
                     IconButton(
                         onClick = {
                             currentViewType = when (currentViewType) {
@@ -102,10 +106,10 @@ fun ProductListScreen(onNavigateToAddProduct: () -> Unit) {
                     ) {
                         Icon(
                             when (currentViewType) {
-                                ViewType.DETAILED -> Icons.Default.Menu         // Vista detallada
-                                ViewType.GRID -> Icons.Default.MoreVert        // Vista en cuadrícula
-                                ViewType.COMPACT -> Icons.Default.List         // Vista compacta
-                                ViewType.SIMPLE -> Icons.Default.KeyboardArrowDown  // Vista simple
+                                ViewType.DETAILED -> Icons.Default.Menu
+                                ViewType.GRID -> Icons.Default.MoreVert
+                                ViewType.COMPACT -> Icons.Default.List
+                                ViewType.SIMPLE -> Icons.Default.KeyboardArrowDown
                             },
                             contentDescription = "Cambiar vista"
                         )
@@ -116,7 +120,8 @@ fun ProductListScreen(onNavigateToAddProduct: () -> Unit) {
                     titleContentColor = MaterialTheme.colorScheme.onPrimaryContainer
                 )
             )
-        },floatingActionButton = {
+        },
+        floatingActionButton = {
             FloatingActionButton(
                 onClick = onNavigateToAddProduct,
                 containerColor = MaterialTheme.colorScheme.primaryContainer,
@@ -131,7 +136,6 @@ fun ProductListScreen(onNavigateToAddProduct: () -> Unit) {
                 .fillMaxSize()
                 .padding(paddingValues)
         ) {
-            // Buscador
             SearchBar(
                 query = searchQuery,
                 onQueryChange = { searchQuery = it },
@@ -152,7 +156,6 @@ fun ProductListScreen(onNavigateToAddProduct: () -> Unit) {
                 }
             ) { }
 
-            // Filtros de categorías
             LazyRow(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -174,19 +177,34 @@ fun ProductListScreen(onNavigateToAddProduct: () -> Unit) {
                 }
             }
 
-
             when (currentViewType) {
-                ViewType.DETAILED -> DetailedProductList(filteredProducts)
-                ViewType.GRID -> GridProductList(filteredProducts)
-                ViewType.COMPACT -> CompactProductList(filteredProducts)
-                ViewType.SIMPLE -> SimpleProductList(filteredProducts)
+                ViewType.DETAILED -> DetailedProductList(filteredProducts, viewModel)
+                ViewType.GRID -> GridProductList(filteredProducts, viewModel)
+                ViewType.COMPACT -> CompactProductList(filteredProducts, viewModel)
+                ViewType.SIMPLE -> SimpleProductList(filteredProducts, viewModel)
             }
         }
     }
 }
 
 @Composable
-fun ProductCard(product: Product) {
+fun DetailedProductList(productos: List<Producto>, viewModel: ProductoViewModel) {
+    LazyColumn(
+        modifier = Modifier.fillMaxSize(),
+        verticalArrangement = Arrangement.spacedBy(16.dp),
+        contentPadding = PaddingValues(16.dp)
+    ) {
+        items(productos) { producto ->
+            ProductCard(producto, viewModel)
+        }
+    }
+}
+
+@Composable
+fun ProductCard(producto: Producto, viewModel: ProductoViewModel) {
+    var showDeleteDialog by remember { mutableStateOf(false) }
+    val scope = rememberCoroutineScope()
+
     ElevatedCard(
         modifier = Modifier
             .fillMaxWidth()
@@ -195,297 +213,379 @@ fun ProductCard(product: Product) {
             defaultElevation = 6.dp
         )
     ) {
-        Row(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(16.dp),
-            horizontalArrangement = Arrangement.spacedBy(16.dp)
-        ) {
-            // Información del producto
-            Column(
-                modifier = Modifier
-                    .weight(1f)
-                    .fillMaxHeight(),
-                verticalArrangement = Arrangement.spacedBy(8.dp)
+        Box(modifier = Modifier.fillMaxSize()) {
+            IconButton(
+                onClick = { showDeleteDialog = true },
+                modifier = Modifier.align(Alignment.TopEnd)
             ) {
-                Text(
-                    text = product.name,
-                    style = MaterialTheme.typography.titleLarge,
-                    fontWeight = FontWeight.Bold
-                )
-                Text(
-                    text = product.description,
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-                Spacer(modifier = Modifier.weight(1f))
-                AssistChip(
-                    onClick = { },
-                    label = { Text(product.category) },
-                    colors = AssistChipDefaults.assistChipColors(
-                        containerColor = MaterialTheme.colorScheme.secondaryContainer
-                    )
-                )
-                Text(
-                    text = "$ ${String.format("%.2f", product.price)}",
-                    style = MaterialTheme.typography.titleMedium,
-                    color = MaterialTheme.colorScheme.primary,
-                    fontWeight = FontWeight.Bold
-                )
+                Icon(Icons.Default.MoreVert, contentDescription = "Opciones")
             }
 
-            // Imagen del producto
-            Card(
+            Row(
                 modifier = Modifier
-                    .size(160.dp)
-                    .clip(MaterialTheme.shapes.medium)
+                    .fillMaxSize()
+                    .padding(16.dp),
+                horizontalArrangement = Arrangement.spacedBy(16.dp)
             ) {
-                Image(
-                    painter = rememberAsyncImagePainter(product.imageUrl),
-                    contentDescription = product.name,
-                    modifier = Modifier.fillMaxSize(),
-                    contentScale = ContentScale.Crop
-                )
+                Column(
+                    modifier = Modifier
+                        .weight(1f)
+                        .fillMaxHeight(),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Text(
+                        text = producto.nombre,
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Text(
+                        text = producto.descripcion,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Spacer(modifier = Modifier.weight(1f))
+                    Text(
+                        text = "$ ${String.format("%.2f", producto.precio)}",
+                        style = MaterialTheme.typography.titleMedium,
+                        color = MaterialTheme.colorScheme.primary,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+
+                Card(
+                    modifier = Modifier
+                        .size(160.dp)
+                        .clip(MaterialTheme.shapes.medium)
+                ) {
+                    AsyncImage(
+                        model = ImageRequest.Builder(LocalContext.current)
+                            .data(producto.imageUrl.replace("http://", "https://"))
+                            .crossfade(true)
+                            .build(),
+                        contentDescription = producto.nombre,
+                        modifier = Modifier.fillMaxSize(),
+                        contentScale = ContentScale.Crop
+                    )
+                }
             }
         }
+    }
+
+    if (showDeleteDialog) {
+        AlertDialog(
+            onDismissRequest = { showDeleteDialog = false },
+            title = { Text("Eliminar producto") },
+            text = { Text("¿Estás seguro de que quieres eliminar este producto?") },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        scope.launch {
+                            viewModel.eliminarProducto(producto.id)
+                        }
+                        showDeleteDialog = false
+                    }
+                ) {
+                    Text("Eliminar")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showDeleteDialog = false }) {
+                    Text("Cancelar")
+                }
+            }
+        )
     }
 }
 
 @Composable
-fun GridProductList(products: List<Product>) {
+fun GridProductList(productos: List<Producto>, viewModel: ProductoViewModel) {
     LazyVerticalGrid(
         columns = GridCells.Fixed(2),
         contentPadding = PaddingValues(16.dp),
         horizontalArrangement = Arrangement.spacedBy(16.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
-        items(products) { product ->
-            GridProductCard(product)
+        items(productos) { producto ->
+            GridProductCard(producto, viewModel)
         }
     }
 }
 
 @Composable
-fun GridProductCard(product: Product) {
+fun GridProductCard(producto: Producto, viewModel: ProductoViewModel) {
+    var showDeleteDialog by remember { mutableStateOf(false) }
+    val scope = rememberCoroutineScope()
+
     ElevatedCard(
         modifier = Modifier
             .fillMaxWidth()
             .height(280.dp)
     ) {
-        Column {
-            // Imagen
-            Card(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(160.dp)
-                    .clip(MaterialTheme.shapes.medium)
+        Box(modifier = Modifier.fillMaxSize()) {
+            IconButton(
+                onClick = { showDeleteDialog = true },
+                modifier = Modifier.align(Alignment.TopEnd)
             ) {
-                Image(
-                    painter = rememberAsyncImagePainter(product.imageUrl),
-                    contentDescription = product.name,
-                    modifier = Modifier.fillMaxSize(),
-                    contentScale = ContentScale.Crop
-                )
+                Icon(Icons.Default.MoreVert, contentDescription = "Opciones")
             }
 
-            // Información
-            Column(
-                modifier = Modifier
-                    .padding(12.dp)
-                    .fillMaxWidth()
-            ) {
-                Text(
-                    text = product.name,
-                    style = MaterialTheme.typography.titleMedium,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-                Spacer(modifier = Modifier.height(4.dp))
-                Text(
-                    text = "$ ${String.format("%.2f", product.price)}",
-                    style = MaterialTheme.typography.titleSmall,
-                    color = MaterialTheme.colorScheme.primary
-                )
-                Spacer(modifier = Modifier.height(4.dp))
-                AssistChip(
-                    onClick = { },
-                    label = { Text(product.category, maxLines = 1) },
-                    modifier = Modifier.fillMaxWidth()
-                )
-            }
-        }
-    }
-}
-
-@Composable
-fun CompactProductList(products: List<Product>) {
-    LazyColumn(
-        contentPadding = PaddingValues(16.dp),
-        verticalArrangement = Arrangement.spacedBy(8.dp)
-    ) {
-        items(products) { product ->
-            ElevatedCard(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(100.dp)
-            ) {
-                Row(
+            Column {
+                Card(
                     modifier = Modifier
-                        .fillMaxSize()
-                        .padding(8.dp),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        .fillMaxWidth()
+                        .height(160.dp)
+                        .clip(MaterialTheme.shapes.medium)
                 ) {
-                    // Imagen pequeña
-                    Card(
-                        modifier = Modifier
-                            .size(84.dp)
-                            .clip(MaterialTheme.shapes.small)
-                    ) {
-                        Image(
-                            painter = rememberAsyncImagePainter(product.imageUrl),
-                            contentDescription = product.name,
-                            modifier = Modifier.fillMaxSize(),
-                            contentScale = ContentScale.Crop
-                        )
-                    }
-
-                    // Información básica
-                    Column(
-                        modifier = Modifier.weight(1f)
-                    ) {
-                        Text(
-                            text = product.name,
-                            style = MaterialTheme.typography.titleMedium,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
-                        Text(
-                            text = "$ ${String.format("%.2f", product.price)}",
-                            style = MaterialTheme.typography.titleSmall,
-                            color = MaterialTheme.colorScheme.primary
-                        )
-                        Text(
-                            text = product.category,
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
+                    AsyncImage(
+                        model = ImageRequest.Builder(LocalContext.current)
+                            .data(producto.imageUrl)
+                            .crossfade(true)
+                            .build(),
+                        contentDescription = producto.nombre,
+                        modifier = Modifier.fillMaxSize(),
+                        contentScale = ContentScale.Crop
+                    )
                 }
-            }
-        }
-    }
-}
 
-@Composable
-fun SimpleProductList(products: List<Product>) {
-    LazyColumn(
-        contentPadding = PaddingValues(16.dp),
-        verticalArrangement = Arrangement.spacedBy(8.dp)
-    ) {
-        items(products) { product ->
-            ElevatedCard(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(72.dp)
-            ) {
-                Row(
+                Column(
                     modifier = Modifier
-                        .fillMaxSize()
-                        .padding(horizontal = 16.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
+                        .padding(12.dp)
+                        .fillMaxWidth()
                 ) {
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(
-                            text = product.name,
-                            style = MaterialTheme.typography.titleMedium
-                        )
-                        Text(
-                            text = product.category,
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
                     Text(
-                        text = "$ ${String.format("%.2f", product.price)}",
+                        text = producto.nombre,
                         style = MaterialTheme.typography.titleMedium,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(
+                        text = "$ ${String.format("%.2f", producto.precio)}",
+                        style = MaterialTheme.typography.titleSmall,
                         color = MaterialTheme.colorScheme.primary
                     )
                 }
             }
         }
     }
-}
-@Composable
-fun DetailedProductList(products: List<Product>) {
-    LazyColumn(
-        modifier = Modifier.fillMaxSize(),
-        verticalArrangement = Arrangement.spacedBy(16.dp),
-        contentPadding = PaddingValues(16.dp)
-    ) {
-        items(products) { product ->
-            ElevatedCard(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(200.dp),
-                elevation = CardDefaults.elevatedCardElevation(
-                    defaultElevation = 6.dp
-                )
-            ) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(16.dp),
-                    horizontalArrangement = Arrangement.spacedBy(16.dp)
-                ) {
-                    // Información del producto
-                    Column(
-                        modifier = Modifier
-                            .weight(1f)
-                            .fillMaxHeight(),
-                        verticalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        Text(
-                            text = product.name,
-                            style = MaterialTheme.typography.titleLarge,
-                            fontWeight = FontWeight.Bold
-                        )
-                        Text(
-                            text = product.description,
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                        Spacer(modifier = Modifier.weight(1f))
-                        AssistChip(
-                            onClick = { },
-                            label = { Text(product.category) },
-                            colors = AssistChipDefaults.assistChipColors(
-                                containerColor = MaterialTheme.colorScheme.secondaryContainer
-                            )
-                        )
-                        Text(
-                            text = "$ ${String.format("%.2f", product.price)}",
-                            style = MaterialTheme.typography.titleMedium,
-                            color = MaterialTheme.colorScheme.primary,
-                            fontWeight = FontWeight.Bold
-                        )
-                    }
 
-                    // Imagen del producto
-                    Card(
-                        modifier = Modifier
-                            .size(160.dp)
-                            .clip(MaterialTheme.shapes.medium)
-                    ) {
-                        Image(
-                            painter = rememberAsyncImagePainter(product.imageUrl),
-                            contentDescription = product.name,
-                            modifier = Modifier.fillMaxSize(),
-                            contentScale = ContentScale.Crop
-                        )
+    if (showDeleteDialog) {
+        AlertDialog(
+            onDismissRequest = { showDeleteDialog = false },
+            title = { Text("Eliminar producto") },
+            text = { Text("¿Estás seguro de que quieres eliminar este producto?") },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        scope.launch {
+                            viewModel.eliminarProducto(producto.id)
+                        }
+                        showDeleteDialog = false
                     }
+                ) {
+                    Text("Eliminar")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showDeleteDialog = false }) {
+                    Text("Cancelar")
+                }
+            }
+        )
+    }
+}
+
+@Composable
+fun CompactProductList(productos: List<Producto>, viewModel: ProductoViewModel) {
+    LazyColumn(
+        contentPadding = PaddingValues(16.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        items(productos) { producto ->
+            CompactProductCard(producto, viewModel)
+        }
+    }
+}
+
+@Composable
+fun CompactProductCard(producto: Producto, viewModel: ProductoViewModel) {
+    var showDeleteDialog by remember { mutableStateOf(false) }
+    val scope = rememberCoroutineScope()
+
+    ElevatedCard(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(100.dp)
+    ) {
+        Box(modifier = Modifier.fillMaxSize()) {
+            IconButton(
+                onClick = { showDeleteDialog = true },
+                modifier = Modifier.align(Alignment.TopEnd)
+            ) {
+                Icon(Icons.Default.MoreVert, contentDescription = "Opciones")
+            }
+
+            Row(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(8.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Card(
+                    modifier = Modifier
+                        .size(84.dp)
+                        .clip(MaterialTheme.shapes.small)
+                ) {
+                    AsyncImage(
+                        model = ImageRequest.Builder(LocalContext.current)
+                            .data(producto.imageUrl)
+                            .crossfade(true)
+                            .build(),
+                        contentDescription = producto.nombre,
+                        modifier = Modifier.fillMaxSize(),
+                        contentScale = ContentScale.Crop
+                    )
+                }
+
+                Column(
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Text(
+                        text = producto.nombre,
+                        style = MaterialTheme.typography.titleMedium,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                    Text(
+                        text = "$ ${String.format("%.2f", producto.precio)}",
+                        style = MaterialTheme.typography.titleSmall,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                    Text(
+                        text = producto.descripcion,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
                 }
             }
         }
+    }
+
+    if (showDeleteDialog) {
+        AlertDialog(
+            onDismissRequest = { showDeleteDialog = false },
+            title = { Text("Eliminar producto") },
+            text = { Text("¿Estás seguro de que quieres eliminar este producto?") },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        scope.launch {
+                            viewModel.eliminarProducto(producto.id)
+                        }
+                        showDeleteDialog = false
+                    }
+                ) {
+                    Text("Eliminar")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showDeleteDialog = false }) {
+                    Text("Cancelar")
+                }
+            }
+        )
+    }
+}
+
+@Composable
+fun SimpleProductList(productos: List<Producto>, viewModel: ProductoViewModel) {
+    LazyColumn(
+        contentPadding = PaddingValues(16.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        items(productos) { producto ->
+            SimpleProductCard(producto, viewModel)
+        }
+    }
+}
+
+@Composable
+fun SimpleProductCard(producto: Producto, viewModel: ProductoViewModel) {
+    var showDeleteDialog by remember { mutableStateOf(false) }
+    val scope = rememberCoroutineScope()
+
+    ElevatedCard(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(72.dp)
+    ) {
+        Box(modifier = Modifier.fillMaxSize()) {
+            IconButton(
+                onClick = { showDeleteDialog = true },
+                modifier = Modifier.align(Alignment.CenterEnd)
+            ) {
+                Icon(Icons.Default.MoreVert, contentDescription = "Opciones")
+            }
+
+            Row(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(horizontal = 16.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column(
+                    modifier = Modifier
+                        .weight(1f)
+                        .padding(end = 48.dp) // Espacio para el botón de opciones
+                ) {
+                    Text(
+                        text = producto.nombre,
+                        style = MaterialTheme.typography.titleMedium,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                    Text(
+                        text = producto.descripcion,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+                Text(
+                    text = "$ ${String.format("%.2f", producto.precio)}",
+                    style = MaterialTheme.typography.titleMedium,
+                    color = MaterialTheme.colorScheme.primary
+                )
+            }
+        }
+    }
+
+    if (showDeleteDialog) {
+        AlertDialog(
+            onDismissRequest = { showDeleteDialog = false },
+            title = { Text("Eliminar producto") },
+            text = { Text("¿Estás seguro de que quieres eliminar este producto?") },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        scope.launch {
+                            viewModel.eliminarProducto(producto.id)
+                        }
+                        showDeleteDialog = false
+                    }
+                ) {
+                    Text("Eliminar")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showDeleteDialog = false }) {
+                    Text("Cancelar")
+                }
+            }
+        )
     }
 }
