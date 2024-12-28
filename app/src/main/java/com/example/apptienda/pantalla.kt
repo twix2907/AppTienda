@@ -338,7 +338,7 @@ fun GridProductCard(producto: Producto, viewModel: ProductoViewModel) {
                 ) {
                     AsyncImage(
                         model = ImageRequest.Builder(LocalContext.current)
-                            .data(producto.imageUrl)
+                            .data(producto.imageUrl.replace("http://", "https://"))
                             .crossfade(true)
                             .build(),
                         contentDescription = producto.nombre,
@@ -438,7 +438,7 @@ fun CompactProductCard(producto: Producto, viewModel: ProductoViewModel) {
                 ) {
                     AsyncImage(
                         model = ImageRequest.Builder(LocalContext.current)
-                            .data(producto.imageUrl)
+                            .data(producto.imageUrl.replace("http://", "https://"))
                             .crossfade(true)
                             .build(),
                         contentDescription = producto.nombre,
