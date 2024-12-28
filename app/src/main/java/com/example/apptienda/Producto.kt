@@ -5,5 +5,6 @@ data class Producto(
     val nombre: String = "",
     val precio: Double = 0.0,
     val descripcion: String = "",
-    val imageUrl: String = ""
+    val imageUrl: String = "",
+    val categorias: List<String> = emptyList() // IDs de las categorías
 )

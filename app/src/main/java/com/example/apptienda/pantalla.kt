@@ -56,14 +56,17 @@ fun ProductListScreen(
     // Obtener productos del ViewModel
     val productos by viewModel.productos.collectAsState()
 
-    // Lista de categorías disponibles
-    val categories = listOf("Todos", "Electrónicos", "Computadoras", "Accesorios", "Móviles")
+    // Obtener categorías del ViewModel
+    val categorias by viewModel.categorias.collectAsState()
+
+
 
     // Filtrar productos
     val filteredProducts = productos.filter { producto ->
         val matchesSearch = producto.nombre.contains(searchQuery, ignoreCase = true) ||
                 producto.descripcion.contains(searchQuery, ignoreCase = true)
-        val matchesCategory = selectedCategory == null || selectedCategory == "Todos"
+        val matchesCategory = selectedCategory == null ||
+                producto.categorias.contains(selectedCategory)
         matchesSearch && matchesCategory
     }
 
@@ -140,13 +143,25 @@ fun ProductListScreen(
                     .padding(horizontal = 16.dp),
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                items(categories) { category ->
+                item {
                     FilterChip(
-                        selected = selectedCategory == category,
+                        selected = selectedCategory == null,
+                        onClick = { selectedCategory = null },
+                        label = { Text("Todos") },
+                        colors = FilterChipDefaults.filterChipColors(
+                            selectedContainerColor = MaterialTheme.colorScheme.primaryContainer,
+                            selectedLabelColor = MaterialTheme.colorScheme.onPrimaryContainer
+                        )
+                    )
+                }
+
+                items(categorias) { categoria ->
+                    FilterChip(
+                        selected = selectedCategory == categoria.id,
                         onClick = {
-                            selectedCategory = if (selectedCategory == category) null else category
+                            selectedCategory = if (selectedCategory == categoria.id) null else categoria.id
                         },
-                        label = { Text(category) },
+                        label = { Text(categoria.nombre) },
                         colors = FilterChipDefaults.filterChipColors(
                             selectedContainerColor = MaterialTheme.colorScheme.primaryContainer,
                             selectedLabelColor = MaterialTheme.colorScheme.onPrimaryContainer
@@ -154,7 +169,6 @@ fun ProductListScreen(
                     )
                 }
             }
-
             when (currentViewType) {
                 ViewType.DETAILED -> DetailedProductList(
                     productos = filteredProducts,
@@ -197,7 +211,7 @@ fun DetailedProductList(
     }
 }
 
-@OptIn(ExperimentalFoundationApi::class)
+@OptIn(ExperimentalFoundationApi::class, ExperimentalLayoutApi::class)
 @Composable
 fun ProductCard(
     producto: Producto,
@@ -247,6 +261,28 @@ fun ProductCard(
                         color = MaterialTheme.colorScheme.primary,
                         fontWeight = FontWeight.Bold
                     )
+                    if (producto.categorias.isNotEmpty()) {
+                        FlowRow(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(4.dp),
+                            verticalArrangement = Arrangement.spacedBy(4.dp)
+                        ) {
+                            producto.categorias.forEach { categoriaId ->
+                                viewModel.getCategoriaById(categoriaId)?.let { categoria ->
+                                    AssistChip(
+                                        onClick = { },
+                                        label = {
+                                            Text(
+                                                text = categoria.nombre,
+                                                style = MaterialTheme.typography.labelSmall
+                                            )
+                                        },
+                                        modifier = Modifier.height(24.dp)
+                                    )
+                                }
+                            }
+                        }
+                    }
                 }
 
                 Box {

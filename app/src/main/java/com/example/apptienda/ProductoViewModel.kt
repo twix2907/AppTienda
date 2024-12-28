@@ -19,8 +19,46 @@ class ProductoViewModel(
     private val _productos = MutableStateFlow<List<Producto>>(emptyList())
     val productos: StateFlow<List<Producto>> = _productos
 
+    private val _categorias = MutableStateFlow<List<Categoria>>(emptyList())
+    val categorias: StateFlow<List<Categoria>> = _categorias
+
     init {
+        cargarCategorias()
         cargarProductos()
+    }
+
+    private fun cargarCategorias() {
+        viewModelScope.launch {
+            try {
+                db.collection("categorias")
+                    .addSnapshotListener { snapshot, e ->
+                        if (e != null) return@addSnapshotListener
+
+                        val categoriasList = snapshot?.documents?.map { doc ->
+                            doc.toObject(Categoria::class.java)?.copy(id = doc.id)
+                        }?.filterNotNull() ?: emptyList()
+
+                        _categorias.value = categoriasList
+                    }
+            } catch (e: Exception) {
+                // Manejar error
+            }
+        }
+    }
+    fun getCategoriaById(id: String): Categoria? {
+        return _categorias.value.find { it.id == id }
+    }
+
+    suspend fun agregarCategoria(nombre: String, descripcion: String = ""): Result<String> {
+        return try {
+            val categoria = Categoria(nombre = nombre, descripcion = descripcion)
+            val docRef = db.collection("categorias")
+                .add(categoria)
+                .await()
+            Result.success(docRef.id)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
     }
 
     fun getProductById(productId: String): Producto? {
@@ -71,13 +109,14 @@ class ProductoViewModel(
         }
     }
 
-    // Función modificada para usar Cloudinary
+    // Modificar la función de agregar producto para incluir categorías
     suspend fun agregarProducto(
         nombre: String,
         precio: Double,
         descripcion: String,
+        categorias: List<String>, // IDs de las categorías
         imageUri: Uri?,
-        context: Context // Nuevo parámetro necesario
+        context: Context
     ): Result<Unit> {
         return try {
             val imageUrl = imageUri?.let { uri ->
@@ -88,7 +127,8 @@ class ProductoViewModel(
                 nombre = nombre,
                 precio = precio,
                 descripcion = descripcion,
-                imageUrl = imageUrl
+                imageUrl = imageUrl,
+                categorias = categorias
             )
 
             db.collection("productos")

@@ -63,9 +63,21 @@ import java.util.Locale
 import android.Manifest.permission.CAMERA
 import android.content.Context
 import android.util.Log
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material3.Divider
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.FilterChip
+import androidx.compose.runtime.collectAsState
 import kotlinx.coroutines.launch
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
 fun AddProductScreen(
     viewModel: ProductoViewModel,
@@ -81,6 +93,11 @@ fun AddProductScreen(
     var tempImageUri by remember { mutableStateOf<Uri?>(null) }
     var showErrorDialog by remember { mutableStateOf(false) }
     var errorMessage by remember { mutableStateOf("") }
+
+    var selectedCategorias by remember { mutableStateOf<Set<String>>(emptySet()) }
+    var showCategoriasMenu by remember { mutableStateOf(false) }
+    var showNewCategoryDialog by remember { mutableStateOf(false) }
+    val categorias by viewModel.categorias.collectAsState()
 
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -160,6 +177,7 @@ fun AddProductScreen(
                                     tempImageUri = createImageFileUri(context)
                                     cameraLauncher.launch(tempImageUri!!)
                                 }
+
                                 else -> {
                                     permissionLauncher.launch(CAMERA)
                                 }
@@ -198,13 +216,18 @@ fun AddProductScreen(
             )
         }
     ) { paddingValues ->
-        Column(
+        Box(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(paddingValues)
-                .padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .verticalScroll(rememberScrollState()) // Agregar scroll
+                    .padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
             OutlinedCard(
                 modifier = Modifier.fillMaxWidth(),
             ) {
@@ -252,6 +275,178 @@ fun AddProductScreen(
                         },
                         prefix = { Text("$") }
                     )
+                    // Selector de categorías con menú desplegable anclado
+                    Box(
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        OutlinedCard(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable { showCategoriasMenu = true }
+                        ) {
+                            Column(
+                                modifier = Modifier.padding(16.dp)
+                            ) {
+                                Text(
+                                    text = "Categorías",
+                                    style = MaterialTheme.typography.labelMedium
+                                )
+
+                                if (selectedCategorias.isEmpty()) {
+                                    Text(
+                                        text = "Selecciona categorías",
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                } else {
+                                    FlowRow(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                    ) {
+                                        selectedCategorias.forEach { categoriaId ->
+                                            categorias.find { it.id == categoriaId }
+                                                ?.let { categoria ->
+                                                    FilterChip(
+                                                        selected = true,
+                                                        onClick = {
+                                                            selectedCategorias =
+                                                                selectedCategorias - categoriaId
+                                                        },
+                                                        label = { Text(categoria.nombre) },
+                                                        trailingIcon = {
+                                                            Icon(
+                                                                Icons.Default.Close,
+                                                                contentDescription = "Eliminar"
+                                                            )
+                                                        }
+                                                    )
+                                                }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+
+                        // El menú desplegable ahora está anclado al Box
+                        DropdownMenu(
+                            expanded = showCategoriasMenu,
+                            onDismissRequest = { showCategoriasMenu = false },
+                            modifier = Modifier.fillMaxWidth(0.9f)
+                        ) {
+                            categorias.forEach { categoria ->
+                                DropdownMenuItem(
+                                    text = {
+                                        Text(
+                                            text = categoria.nombre,
+                                            color = if (selectedCategorias.contains(categoria.id)) {
+                                                MaterialTheme.colorScheme.primary
+                                            } else {
+                                                MaterialTheme.colorScheme.onSurface
+                                            }
+                                        )
+                                    },
+                                    onClick = {
+                                        selectedCategorias = if (selectedCategorias.contains(categoria.id)) {
+                                            selectedCategorias - categoria.id
+                                        } else {
+                                            selectedCategorias + categoria.id
+                                        }
+                                    },
+                                    leadingIcon = {
+                                        if (selectedCategorias.contains(categoria.id)) {
+                                            Icon(
+                                                imageVector = Icons.Default.Done,
+                                                contentDescription = null,
+                                                tint = MaterialTheme.colorScheme.primary
+                                            )
+                                        }
+                                    },
+                                    modifier = Modifier.background(
+                                        if (selectedCategorias.contains(categoria.id)) {
+                                            MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.1f)
+                                        } else {
+                                            MaterialTheme.colorScheme.surface
+                                        }
+                                    )
+                                )
+                            }
+
+                            Divider(modifier = Modifier.padding(vertical = 4.dp))
+
+                            DropdownMenuItem(
+                                text = { Text("Agregar nueva categoría") },
+                                onClick = {
+                                    showCategoriasMenu = false
+                                    showNewCategoryDialog = true
+                                },
+                                leadingIcon = {
+                                    Icon(
+                                        Icons.Default.Add,
+                                        contentDescription = null,
+                                        tint = MaterialTheme.colorScheme.primary
+                                    )
+                                }
+                            )
+                        }
+                    }
+
+// Diálogo para nueva categoría
+                    if (showNewCategoryDialog) {
+                        var nuevaCategoria by remember { mutableStateOf("") }
+                        var descripcionCategoria by remember { mutableStateOf("") }
+
+                        AlertDialog(
+                            onDismissRequest = { showNewCategoryDialog = false },
+                            title = { Text("Nueva categoría") },
+                            text = {
+                                Column(
+                                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                                ) {
+                                    OutlinedTextField(
+                                        value = nuevaCategoria,
+                                        onValueChange = { nuevaCategoria = it },
+                                        label = { Text("Nombre de la categoría") },
+                                        singleLine = true
+                                    )
+                                    OutlinedTextField(
+                                        value = descripcionCategoria,
+                                        onValueChange = { descripcionCategoria = it },
+                                        label = { Text("Descripción (opcional)") },
+                                        singleLine = true
+                                    )
+                                }
+                            },
+                            confirmButton = {
+                                TextButton(
+                                    onClick = {
+                                        if (nuevaCategoria.isNotBlank()) {
+                                            scope.launch {
+                                                viewModel.agregarCategoria(
+                                                    nombre = nuevaCategoria,
+                                                    descripcion = descripcionCategoria
+                                                ).onSuccess { categoriaId ->
+                                                    selectedCategorias =
+                                                        selectedCategorias + categoriaId
+                                                    showNewCategoryDialog = false
+                                                }.onFailure { error ->
+                                                    errorMessage = error.message
+                                                        ?: "Error al crear la categoría"
+                                                    showErrorDialog = true
+                                                }
+                                            }
+                                        }
+                                    }
+                                ) {
+                                    Text("Guardar")
+                                }
+                            },
+                            dismissButton = {
+                                TextButton(onClick = { showNewCategoryDialog = false }) {
+                                    Text("Cancelar")
+                                }
+                            }
+                        )
+                    }
 
                     OutlinedCard(
                         modifier = Modifier
@@ -277,7 +472,10 @@ fun AddProductScreen(
                                         onSuccess = { isLoading = false },
                                         onError = {
                                             isLoading = false
-                                            Log.e("Image", "Error loading image: ${it.result.throwable}")
+                                            Log.e(
+                                                "Image",
+                                                "Error loading image: ${it.result.throwable}"
+                                            )
                                         }
                                     )
                                     if (isLoading) {
@@ -310,61 +508,73 @@ fun AddProductScreen(
                 }
             }
 
-            // Botón de guardar
-            Button(
-                onClick = {
-                    if (nombre.isBlank() || precio.isBlank()) {
-                        errorMessage = "Por favor completa todos los campos requeridos"
-                        showErrorDialog = true
-                        return@Button
-                    }
 
-                    val precioDouble = precio.toDoubleOrNull()
-                    if (precioDouble == null) {
-                        errorMessage = "Por favor ingresa un precio válido"
-                        showErrorDialog = true
-                        return@Button
-                    }
-
-                    isLoading = true
-                    scope.launch {
-                        try {
-                            viewModel.agregarProducto(
-                                nombre = nombre,
-                                precio = precioDouble,
-                                descripcion = descripcion,
-                                imageUri = imageUri,
-                                context = context
-                            ).onSuccess {
-                                onNavigateBack()
-                            }.onFailure { error ->
-                                errorMessage = error.message ?: "Error al guardar el producto"
-                                showErrorDialog = true
-                            }
-                        } finally {
-                            isLoading = false
-                        }
-                    }
-                },
-                modifier = Modifier.fillMaxWidth(),
-                enabled = !isLoading,
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = MaterialTheme.colorScheme.primary
-                )
+                Spacer(modifier = Modifier.height(80.dp))
+        }
+            // Botón flotante en la parte inferior
+            Box(
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .fillMaxWidth()
+                    .background(MaterialTheme.colorScheme.surface)
+                    .padding(16.dp)
             ) {
-                if (isLoading) {
-                    CircularProgressIndicator(
-                        modifier = Modifier.size(24.dp),
-                        color = MaterialTheme.colorScheme.onPrimary
+                Button(
+                    onClick = {
+                        if (nombre.isBlank() || precio.isBlank()) {
+                            errorMessage = "Por favor completa todos los campos requeridos"
+                            showErrorDialog = true
+                            return@Button
+                        }
+
+                        val precioDouble = precio.toDoubleOrNull()
+                        if (precioDouble == null) {
+                            errorMessage = "Por favor ingresa un precio válido"
+                            showErrorDialog = true
+                            return@Button
+                        }
+
+                        isLoading = true
+                        scope.launch {
+                            try {
+                                viewModel.agregarProducto(
+                                    nombre = nombre,
+                                    precio = precioDouble,
+                                    descripcion = descripcion,
+                                    categorias = selectedCategorias.toList(),
+                                    imageUri = imageUri,
+                                    context = context
+                                ).onSuccess {
+                                    onNavigateBack()
+                                }.onFailure { error ->
+                                    errorMessage = error.message ?: "Error al guardar el producto"
+                                    showErrorDialog = true
+                                }
+                            } finally {
+                                isLoading = false
+                            }
+                        }
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                    enabled = !isLoading,
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = MaterialTheme.colorScheme.primary
                     )
-                } else {
-                    Icon(Icons.Default.Done, contentDescription = null)
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text("Guardar Producto")
+                ) {
+                    if (isLoading) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(24.dp),
+                            color = MaterialTheme.colorScheme.onPrimary
+                        )
+                    } else {
+                        Icon(Icons.Default.Done, contentDescription = null)
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text("Guardar Producto")
+                    }
                 }
             }
-        }
     }
+}
 }
 
 // Función auxiliar para crear el archivo de imagen
