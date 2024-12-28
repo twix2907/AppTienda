@@ -14,11 +14,33 @@ class CloudinaryRepository {
     suspend fun uploadImage(imageUri: Uri, context: Context): String {
         return suspendCancellableCoroutine { continuation ->
             try {
+                // Crear opciones de optimización
+                val options = HashMap<String, Any>().apply {
+                    // Optimización de calidad automática con modo económico
+                    put("quality_analysis", true)
+                    put("quality", "auto:eco")
+
+                    // Formato automático optimizado
+                    put("fetch_format", "auto")
+
+                    // Limitar dimensiones máximas
+                    put("width", 1024)
+                    put("height", 1024)
+                    put("crop", "limit")
+
+                    // Compresión optimizada
+                    put("compression", "low")
+
+                    // Eliminar metadata innecesaria
+                    put("strip", true)
+                }
+
                 MediaManager.get()
                     .upload(imageUri)
+                    .options(options)
                     .callback(object : UploadCallback {
                         override fun onStart(requestId: String) {
-                            Log.d("Cloudinary", "Iniciando subida")
+                            Log.d("Cloudinary", "Iniciando subida optimizada")
                         }
 
                         override fun onProgress(requestId: String, bytes: Long, totalBytes: Long) {
@@ -28,9 +50,13 @@ class CloudinaryRepository {
 
                         override fun onSuccess(requestId: String, resultData: Map<*, *>) {
                             val imageUrl = (resultData["url"] as? String)?.replace("http://", "https://")
-                            Log.d("Cloudinary", "URL obtenida: $imageUrl")
-                            if (imageUrl != null) {
-                                continuation.resume(imageUrl)
+                            // Agregar transformaciones a la URL para optimización adicional
+                            val optimizedUrl = imageUrl?.let { url ->
+                                url.replace("/upload/", "/upload/f_auto,q_auto:eco,c_limit,w_1024/")
+                            }
+                            Log.d("Cloudinary", "URL optimizada: $optimizedUrl")
+                            if (optimizedUrl != null) {
+                                continuation.resume(optimizedUrl)
                             } else {
                                 continuation.resumeWithException(Exception("URL no encontrada"))
                             }

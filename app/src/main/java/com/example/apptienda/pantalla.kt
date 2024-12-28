@@ -1,6 +1,10 @@
 package com.example.apptienda
 
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
+import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.gestures.rememberTransformableState
+import androidx.compose.foundation.gestures.transformable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
@@ -23,6 +27,10 @@ import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import coil3.request.crossfade
 import kotlinx.coroutines.launch
 
@@ -189,6 +197,7 @@ fun DetailedProductList(
     }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun ProductCard(
     producto: Producto,
@@ -197,6 +206,7 @@ fun ProductCard(
 ) {
     var showMenu by remember { mutableStateOf(false) }
     var showDeleteDialog by remember { mutableStateOf(false) }
+    var showImagePreview by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
 
     ElevatedCard(
@@ -251,7 +261,10 @@ fun ProductCard(
                                 .crossfade(true)
                                 .build(),
                             contentDescription = producto.nombre,
-                            modifier = Modifier.fillMaxSize(),
+                            modifier = Modifier.fillMaxSize().combinedClickable(
+                                onClick = { },
+                                onLongClick = { showImagePreview = true }
+                            ),
                             contentScale = ContentScale.Crop
                         )
                     }
@@ -355,6 +368,90 @@ fun ProductCard(
                     Text("Cancelar")
                 }
             }
+        )
+    }
+    // Diálogo de vista previa de imagen con zoom
+    if (showImagePreview) {
+        Dialog(
+            onDismissRequest = { showImagePreview = false },
+            properties = DialogProperties(
+                dismissOnBackPress = true,
+                dismissOnClickOutside = true
+            )
+        ) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(16.dp)
+                    .background(
+                        color = MaterialTheme.colorScheme.surface,
+                        shape = RoundedCornerShape(8.dp)
+                    )
+            ) {
+                // Imagen con zoom
+                ZoomableImage(
+                    imageUrl = producto.imageUrl.replace("http://", "https://"),
+                    contentDescription = producto.nombre
+                )
+
+                // Botón de cerrar
+                IconButton(
+                    onClick = { showImagePreview = false },
+                    modifier = Modifier
+                        .align(Alignment.TopEnd)
+                        .padding(8.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Close,
+                        contentDescription = "Cerrar",
+                        tint = MaterialTheme.colorScheme.onSurface
+                    )
+                }
+            }
+        }
+    }
+}
+@Composable
+private fun ZoomableImage(
+    imageUrl: String,
+    contentDescription: String?
+) {
+    var scale by remember { mutableStateOf(1f) }
+    var offsetX by remember { mutableStateOf(0f) }
+    var offsetY by remember { mutableStateOf(0f) }
+
+    val state = rememberTransformableState { zoomChange, offsetChange, _ ->
+        scale = (scale * zoomChange).coerceIn(1f, 3f)
+        if (scale > 1f) {
+            offsetX += offsetChange.x
+            offsetY += offsetChange.y
+        } else {
+            offsetX = 0f
+            offsetY = 0f
+        }
+    }
+
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(16.dp)
+    ) {
+        AsyncImage(
+            model = ImageRequest.Builder(LocalContext.current)
+                .data(imageUrl)
+                .crossfade(true)
+                .build(),
+            contentDescription = contentDescription,
+            modifier = Modifier
+                .fillMaxWidth()
+                .graphicsLayer {
+                    scaleX = scale
+                    scaleY = scale
+                    translationX = offsetX
+                    translationY = offsetY
+                }
+                .transformable(state = state),
+            contentScale = ContentScale.FillWidth
         )
     }
 }
