@@ -1,5 +1,6 @@
 package com.example.apptienda
 
+
 import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Environment
@@ -63,21 +64,30 @@ import java.util.Locale
 import android.Manifest.permission.CAMERA
 import android.content.Context
 import android.util.Log
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
+import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material3.Divider
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.FilterChip
 import androidx.compose.runtime.collectAsState
+import androidx.compose.ui.input.pointer.pointerInput
 import kotlinx.coroutines.launch
 
-@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class,
+    ExperimentalFoundationApi::class
+)
 @Composable
 fun AddProductScreen(
     viewModel: ProductoViewModel,
@@ -93,6 +103,7 @@ fun AddProductScreen(
     var tempImageUri by remember { mutableStateOf<Uri?>(null) }
     var showErrorDialog by remember { mutableStateOf(false) }
     var errorMessage by remember { mutableStateOf("") }
+
 
     var selectedCategorias by remember { mutableStateOf<Set<String>>(emptySet()) }
     var showCategoriasMenu by remember { mutableStateOf(false) }
@@ -304,81 +315,115 @@ fun AddProductScreen(
                                         horizontalArrangement = Arrangement.spacedBy(8.dp)
                                     ) {
                                         selectedCategorias.forEach { categoriaId ->
-                                            categorias.find { it.id == categoriaId }
-                                                ?.let { categoria ->
-                                                    FilterChip(
-                                                        selected = true,
-                                                        onClick = {
-                                                            selectedCategorias =
-                                                                selectedCategorias - categoriaId
-                                                        },
-                                                        label = { Text(categoria.nombre) },
-                                                        trailingIcon = {
-                                                            Icon(
-                                                                Icons.Default.Close,
-                                                                contentDescription = "Eliminar"
-                                                            )
-                                                        }
-                                                    )
-                                                }
+                                            categorias.find { it.id == categoriaId }?.let { categoria ->
+                                                FilterChip(
+                                                    selected = true,
+                                                    onClick = {
+                                                        selectedCategorias = selectedCategorias - categoriaId
+                                                    },
+                                                    label = { Text(categoria.nombre) },
+                                                    trailingIcon = {
+                                                        Icon(
+                                                            Icons.Default.Close,
+                                                            contentDescription = "Eliminar"
+                                                        )
+                                                    }
+                                                )
+                                            }
                                         }
                                     }
                                 }
                             }
                         }
 
-                        // El menú desplegable ahora está anclado al Box
                         DropdownMenu(
                             expanded = showCategoriasMenu,
                             onDismissRequest = { showCategoriasMenu = false },
-                            modifier = Modifier.fillMaxWidth(0.9f)
+                            modifier = Modifier.fillMaxWidth(0.8f)
                         ) {
                             categorias.forEach { categoria ->
-                                DropdownMenuItem(
-                                    text = {
-                                        Text(
-                                            text = categoria.nombre,
-                                            color = if (selectedCategorias.contains(categoria.id)) {
-                                                MaterialTheme.colorScheme.primary
-                                            } else {
-                                                MaterialTheme.colorScheme.onSurface
+                                var showContextMenu by remember { mutableStateOf(false) }
+
+                                Box(
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    Row(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .combinedClickable(
+                                                onClick = {
+                                                    selectedCategorias = if (selectedCategorias.contains(categoria.id)) {
+                                                        selectedCategorias - categoria.id
+                                                    } else {
+                                                        selectedCategorias + categoria.id
+                                                    }
+                                                },
+                                                onLongClick = { showContextMenu = true }
+                                            )
+                                            .padding(16.dp),
+                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Row(
+                                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            if (selectedCategorias.contains(categoria.id)) {
+                                                Icon(
+                                                    imageVector = Icons.Default.Check,
+                                                    contentDescription = null,
+                                                    tint = MaterialTheme.colorScheme.primary
+                                                )
                                             }
-                                        )
-                                    },
-                                    onClick = {
-                                        selectedCategorias = if (selectedCategorias.contains(categoria.id)) {
-                                            selectedCategorias - categoria.id
-                                        } else {
-                                            selectedCategorias + categoria.id
-                                        }
-                                    },
-                                    leadingIcon = {
-                                        if (selectedCategorias.contains(categoria.id)) {
-                                            Icon(
-                                                imageVector = Icons.Default.Done,
-                                                contentDescription = null,
-                                                tint = MaterialTheme.colorScheme.primary
+                                            Text(
+                                                text = categoria.nombre,
+                                                color = if (selectedCategorias.contains(categoria.id)) {
+                                                    MaterialTheme.colorScheme.primary
+                                                } else {
+                                                    MaterialTheme.colorScheme.onSurface
+                                                }
                                             )
                                         }
-                                    },
-                                    modifier = Modifier.background(
-                                        if (selectedCategorias.contains(categoria.id)) {
-                                            MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.1f)
-                                        } else {
-                                            MaterialTheme.colorScheme.surface
-                                        }
-                                    )
-                                )
+                                    }
+
+                                    DropdownMenu(
+                                        expanded = showContextMenu,
+                                        onDismissRequest = { showContextMenu = false }
+                                    ) {
+                                        DropdownMenuItem(
+                                            text = { Text("Eliminar categoría", color = MaterialTheme.colorScheme.error) },
+                                            onClick = {
+                                                showContextMenu = false
+                                                scope.launch {
+                                                    viewModel.eliminarCategoria(categoria.id)
+                                                        .onSuccess {
+                                                            if (selectedCategorias.contains(categoria.id)) {
+                                                                selectedCategorias = selectedCategorias - categoria.id
+                                                            }
+                                                        }
+                                                        .onFailure { e ->
+                                                            errorMessage = "Error al eliminar la categoría: ${e.message}"
+                                                            showErrorDialog = true
+                                                        }
+                                                }
+                                            },
+                                            leadingIcon = {
+                                                Icon(
+                                                    Icons.Default.Close,
+                                                    contentDescription = "Eliminar",
+                                                    tint = MaterialTheme.colorScheme.error
+                                                )
+                                            }
+                                        )
+                                    }
+                                }
                             }
 
                             Divider(modifier = Modifier.padding(vertical = 4.dp))
 
                             DropdownMenuItem(
                                 text = { Text("Agregar nueva categoría") },
-                                onClick = {
-                                    showCategoriasMenu = false
-                                    showNewCategoryDialog = true
-                                },
+                                onClick = { showNewCategoryDialog = true },
                                 leadingIcon = {
                                     Icon(
                                         Icons.Default.Add,

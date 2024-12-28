@@ -1,9 +1,10 @@
 package com.example.apptienda
 
+import androidx.annotation.Keep
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.toObjects
 import kotlinx.coroutines.tasks.await
-
+@Keep
 class FirestoreRepository {
     private val db = FirebaseFirestore.getInstance()
     private val productosCollection = db.collection("productos")

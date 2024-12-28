@@ -2,15 +2,17 @@ package com.example.apptienda
 
 import android.content.Context
 import android.net.Uri
+import androidx.annotation.Keep
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.google.firebase.firestore.FirebaseFirestore
+import com.google.firebase.firestore.Query
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
 import java.util.UUID
-
+@Keep
 class ProductoViewModel(
     private val cloudinaryRepository: CloudinaryRepository // Nuevo
 ) : ViewModel() {
@@ -72,13 +74,15 @@ class ProductoViewModel(
     ): Result<Unit> {
         return try {
             val imageUrl = if (newImageUri != null) {
-                // Solo subir nueva imagen si se seleccionó una
                 cloudinaryRepository.uploadImage(newImageUri, context)
             } else {
-                producto.imageUrl // Mantener la URL existente
+                producto.imageUrl
             }
 
-            val productoActualizado = producto.copy(imageUrl = imageUrl)
+            val productoActualizado = producto.copy(
+                imageUrl = imageUrl,
+                idNumerico = producto.idNumerico // Mantener el ID numérico existente
+            )
 
             db.collection("productos")
                 .document(producto.id)
@@ -109,21 +113,23 @@ class ProductoViewModel(
         }
     }
 
-    // Modificar la función de agregar producto para incluir categorías
     suspend fun agregarProducto(
         nombre: String,
         precio: Double,
         descripcion: String,
-        categorias: List<String>, // IDs de las categorías
+        categorias: List<String>,
         imageUri: Uri?,
         context: Context
     ): Result<Unit> {
         return try {
+            val idNumerico = obtenerSiguienteId()
+
             val imageUrl = imageUri?.let { uri ->
                 cloudinaryRepository.uploadImage(uri, context)
             } ?: ""
 
             val producto = Producto(
+                idNumerico = idNumerico,
                 nombre = nombre,
                 precio = precio,
                 descripcion = descripcion,
@@ -154,16 +160,48 @@ class ProductoViewModel(
         }
     }
 
-    // Esta función se mantiene igual
-    suspend fun actualizarProducto(producto: Producto): Result<Unit> {
+
+    suspend fun eliminarCategoria(categoriaId: String): Result<Unit> {
         return try {
-            db.collection("productos")
-                .document(producto.id)
-                .set(producto)
+            db.collection("categorias")
+                .document(categoriaId)
+                .delete()
                 .await()
             Result.success(Unit)
         } catch (e: Exception) {
             Result.failure(e)
         }
     }
+    private suspend fun obtenerSiguienteId(): Long {
+        return try {
+            // Obtener el documento que almacena el contador
+            val contadorDoc = db.collection("contadores").document("productos")
+
+            // Realizar una transacción para incrementar el contador de forma segura
+            db.runTransaction { transaction ->
+                val snapshot = transaction.get(contadorDoc)
+                val currentId = snapshot.getLong("ultimoId") ?: -1
+                val nextId = currentId + 1
+
+                // Actualizar el contador
+                transaction.set(contadorDoc, hashMapOf("ultimoId" to nextId))
+
+                nextId
+            }.await()
+        } catch (e: Exception) {
+            // Si hay algún error, intentar obtener el máximo ID actual y sumar 1
+            val maxId = db.collection("productos")
+                .orderBy("idNumerico", Query.Direction.DESCENDING)
+                .limit(1)
+                .get()
+                .await()
+                .documents
+                .firstOrNull()
+                ?.getLong("idNumerico") ?: -1
+
+            maxId + 1
+        }
+    }
+
+
 }

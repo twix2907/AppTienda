@@ -2,10 +2,11 @@ package com.example.apptienda
 
 import android.app.Application
 import android.util.Log
+import androidx.annotation.Keep
 import com.cloudinary.android.MediaManager
 import com.google.firebase.Firebase
 import com.google.firebase.initialize
-
+@Keep
 class MyApplication : Application() {
     override fun onCreate() {
         super.onCreate()
