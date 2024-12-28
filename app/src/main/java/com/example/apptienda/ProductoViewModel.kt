@@ -23,6 +23,35 @@ class ProductoViewModel(
         cargarProductos()
     }
 
+    fun getProductById(productId: String): Producto? {
+        return productos.value.find { it.id == productId }
+    }
+
+    suspend fun actualizarProducto(
+        producto: Producto,
+        newImageUri: Uri?,
+        context: Context
+    ): Result<Unit> {
+        return try {
+            val imageUrl = if (newImageUri != null) {
+                // Solo subir nueva imagen si se seleccionó una
+                cloudinaryRepository.uploadImage(newImageUri, context)
+            } else {
+                producto.imageUrl // Mantener la URL existente
+            }
+
+            val productoActualizado = producto.copy(imageUrl = imageUrl)
+
+            db.collection("productos")
+                .document(producto.id)
+                .set(productoActualizado)
+                .await()
+
+            Result.success(Unit)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
     private fun cargarProductos() {
         viewModelScope.launch {
             try {

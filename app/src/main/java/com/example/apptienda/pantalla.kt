@@ -1,11 +1,6 @@
 package com.example.apptienda
 
-
-import android.util.Log
-import androidx.compose.ui.platform.LocalContext
-import coil3.compose.AsyncImage
-import coil3.request.ImageRequest
-import androidx.compose.foundation.Image
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
@@ -18,44 +13,19 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import coil3.compose.rememberAsyncImagePainter
+import coil3.compose.AsyncImage
+import coil3.request.ImageRequest
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
-import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.foundation.shape.CircleShape
 import coil3.request.crossfade
 import kotlinx.coroutines.launch
 
-
-
-@Composable
-fun ImageLoadingPlaceholder() {
-    Box(
-        modifier = Modifier.fillMaxSize(),
-        contentAlignment = Alignment.Center
-    ) {
-        CircularProgressIndicator(
-            color = MaterialTheme.colorScheme.primary,
-            modifier = Modifier.size(24.dp)
-        )
-    }
-}
-
-@Composable
-fun ImageErrorPlaceholder() {
-    Box(
-        modifier = Modifier.fillMaxSize(),
-        contentAlignment = Alignment.Center
-    ) {
-        Icon(
-            imageVector = Icons.Default.AccountBox,
-            contentDescription = null,
-            tint = MaterialTheme.colorScheme.error
-        )
-    }
-}
 // Enum para los tipos de vista
 enum class ViewType {
     DETAILED,    // Vista detallada original
@@ -68,12 +38,12 @@ enum class ViewType {
 @Composable
 fun ProductListScreen(
     viewModel: ProductoViewModel,
-    onNavigateToAddProduct: () -> Unit
+    onNavigateToAddProduct: () -> Unit,
+    onNavigateToEditProduct: (Producto) -> Unit
 ) {
     var searchQuery by remember { mutableStateOf("") }
     var selectedCategory by remember { mutableStateOf<String?>(null) }
     var currentViewType by remember { mutableStateOf(ViewType.DETAILED) }
-    val scope = rememberCoroutineScope()
 
     // Obtener productos del ViewModel
     val productos by viewModel.productos.collectAsState()
@@ -178,30 +148,54 @@ fun ProductListScreen(
             }
 
             when (currentViewType) {
-                ViewType.DETAILED -> DetailedProductList(filteredProducts, viewModel)
-                ViewType.GRID -> GridProductList(filteredProducts, viewModel)
-                ViewType.COMPACT -> CompactProductList(filteredProducts, viewModel)
-                ViewType.SIMPLE -> SimpleProductList(filteredProducts, viewModel)
+                ViewType.DETAILED -> DetailedProductList(
+                    productos = filteredProducts,
+                    viewModel = viewModel,
+                    onNavigateToEdit = onNavigateToEditProduct
+                )
+                ViewType.GRID -> GridProductList(
+                    productos = filteredProducts,
+                    viewModel = viewModel,
+                    onNavigateToEdit = onNavigateToEditProduct
+                )
+                ViewType.COMPACT -> CompactProductList(
+                    productos = filteredProducts,
+                    viewModel = viewModel,
+                    onNavigateToEdit = onNavigateToEditProduct
+                )
+                ViewType.SIMPLE -> SimpleProductList(
+                    productos = filteredProducts,
+                    viewModel = viewModel,
+                    onNavigateToEdit = onNavigateToEditProduct
+                )
             }
         }
     }
 }
-
 @Composable
-fun DetailedProductList(productos: List<Producto>, viewModel: ProductoViewModel) {
+fun DetailedProductList(
+    productos: List<Producto>,
+    viewModel: ProductoViewModel,
+    onNavigateToEdit: (Producto) -> Unit
+) {
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
         verticalArrangement = Arrangement.spacedBy(16.dp),
         contentPadding = PaddingValues(16.dp)
     ) {
         items(productos) { producto ->
-            ProductCard(producto, viewModel)
+            ProductCard(producto, viewModel, onNavigateToEdit)
         }
     }
 }
 
 @Composable
-fun ProductCard(producto: Producto, viewModel: ProductoViewModel) {
+fun ProductCard(
+    producto: Producto,
+    viewModel: ProductoViewModel,
+    onNavigateToEdit: (Producto) -> Unit
+) {
+    var showMenu by remember { mutableStateOf(false) }
     var showDeleteDialog by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
 
@@ -214,13 +208,6 @@ fun ProductCard(producto: Producto, viewModel: ProductoViewModel) {
         )
     ) {
         Box(modifier = Modifier.fillMaxSize()) {
-            IconButton(
-                onClick = { showDeleteDialog = true },
-                modifier = Modifier.align(Alignment.TopEnd)
-            ) {
-                Icon(Icons.Default.MoreVert, contentDescription = "Opciones")
-            }
-
             Row(
                 modifier = Modifier
                     .fillMaxSize()
@@ -252,20 +239,92 @@ fun ProductCard(producto: Producto, viewModel: ProductoViewModel) {
                     )
                 }
 
-                Card(
-                    modifier = Modifier
-                        .size(160.dp)
-                        .clip(MaterialTheme.shapes.medium)
-                ) {
-                    AsyncImage(
-                        model = ImageRequest.Builder(LocalContext.current)
-                            .data(producto.imageUrl.replace("http://", "https://"))
-                            .crossfade(true)
-                            .build(),
-                        contentDescription = producto.nombre,
-                        modifier = Modifier.fillMaxSize(),
-                        contentScale = ContentScale.Crop
-                    )
+                Box {
+                    Card(
+                        modifier = Modifier
+                            .size(160.dp)
+                            .clip(MaterialTheme.shapes.medium)
+                    ) {
+                        AsyncImage(
+                            model = ImageRequest.Builder(LocalContext.current)
+                                .data(producto.imageUrl.replace("http://", "https://"))
+                                .crossfade(true)
+                                .build(),
+                            contentDescription = producto.nombre,
+                            modifier = Modifier.fillMaxSize(),
+                            contentScale = ContentScale.Crop
+                        )
+                    }
+
+                    // Menú de opciones con fondo semitransparente
+                    Box(
+                        modifier = Modifier
+                            .padding(4.dp)
+                            .align(Alignment.TopEnd)
+                            .background(
+                                color = MaterialTheme.colorScheme.surface.copy(alpha = 0.7f),
+                                shape = CircleShape
+                            )
+                    ) {
+                        IconButton(
+                            onClick = { showMenu = true },
+                            modifier = Modifier.size(32.dp)
+                        ) {
+                            Icon(
+                                Icons.Default.MoreVert,
+                                contentDescription = "Opciones",
+                                tint = MaterialTheme.colorScheme.onSurface,
+                                modifier = Modifier.size(20.dp)
+                            )
+                        }
+
+                        DropdownMenu(
+                            expanded = showMenu,
+                            onDismissRequest = { showMenu = false }
+                        ) {
+                            DropdownMenuItem(
+                                text = {
+                                    Row(
+                                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.Edit,
+                                            contentDescription = null,
+                                            tint = MaterialTheme.colorScheme.primary
+                                        )
+                                        Text("Editar")
+                                    }
+                                },
+                                onClick = {
+                                    showMenu = false
+                                    onNavigateToEdit(producto)
+                                }
+                            )
+                            DropdownMenuItem(
+                                text = {
+                                    Row(
+                                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.Delete,
+                                            contentDescription = null,
+                                            tint = MaterialTheme.colorScheme.error
+                                        )
+                                        Text(
+                                            "Eliminar",
+                                            color = MaterialTheme.colorScheme.error
+                                        )
+                                    }
+                                },
+                                onClick = {
+                                    showMenu = false
+                                    showDeleteDialog = true
+                                }
+                            )
+                        }
+                    }
                 }
             }
         }
@@ -283,7 +342,10 @@ fun ProductCard(producto: Producto, viewModel: ProductoViewModel) {
                             viewModel.eliminarProducto(producto.id)
                         }
                         showDeleteDialog = false
-                    }
+                    },
+                    colors = ButtonDefaults.textButtonColors(
+                        contentColor = MaterialTheme.colorScheme.error
+                    )
                 ) {
                     Text("Eliminar")
                 }
@@ -296,9 +358,12 @@ fun ProductCard(producto: Producto, viewModel: ProductoViewModel) {
         )
     }
 }
-
 @Composable
-fun GridProductList(productos: List<Producto>, viewModel: ProductoViewModel) {
+fun GridProductList(
+    productos: List<Producto>,
+    viewModel: ProductoViewModel,
+    onNavigateToEdit: (Producto) -> Unit
+) {
     LazyVerticalGrid(
         columns = GridCells.Fixed(2),
         contentPadding = PaddingValues(16.dp),
@@ -306,13 +371,18 @@ fun GridProductList(productos: List<Producto>, viewModel: ProductoViewModel) {
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
         items(productos) { producto ->
-            GridProductCard(producto, viewModel)
+            GridProductCard(producto, viewModel, onNavigateToEdit)
         }
     }
 }
 
 @Composable
-fun GridProductCard(producto: Producto, viewModel: ProductoViewModel) {
+fun GridProductCard(
+    producto: Producto,
+    viewModel: ProductoViewModel,
+    onNavigateToEdit: (Producto) -> Unit
+) {
+    var showMenu by remember { mutableStateOf(false) }
     var showDeleteDialog by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
 
@@ -321,20 +391,13 @@ fun GridProductCard(producto: Producto, viewModel: ProductoViewModel) {
             .fillMaxWidth()
             .height(280.dp)
     ) {
-        Box(modifier = Modifier.fillMaxSize()) {
-            IconButton(
-                onClick = { showDeleteDialog = true },
-                modifier = Modifier.align(Alignment.TopEnd)
-            ) {
-                Icon(Icons.Default.MoreVert, contentDescription = "Opciones")
-            }
-
-            Column {
-                Card(
+        Column {
+            Box {
+                // Imagen
+                Box(
                     modifier = Modifier
                         .fillMaxWidth()
                         .height(160.dp)
-                        .clip(MaterialTheme.shapes.medium)
                 ) {
                     AsyncImage(
                         model = ImageRequest.Builder(LocalContext.current)
@@ -345,26 +408,103 @@ fun GridProductCard(producto: Producto, viewModel: ProductoViewModel) {
                         modifier = Modifier.fillMaxSize(),
                         contentScale = ContentScale.Crop
                     )
-                }
 
-                Column(
-                    modifier = Modifier
-                        .padding(12.dp)
-                        .fillMaxWidth()
-                ) {
-                    Text(
-                        text = producto.nombre,
-                        style = MaterialTheme.typography.titleMedium,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                    Spacer(modifier = Modifier.height(4.dp))
-                    Text(
-                        text = "$ ${String.format("%.2f", producto.precio)}",
-                        style = MaterialTheme.typography.titleSmall,
-                        color = MaterialTheme.colorScheme.primary
-                    )
+                    // Menú de opciones con fondo semitransparente
+                    Box(
+                        modifier = Modifier
+                            .padding(4.dp)
+                            .align(Alignment.TopEnd)
+                            .background(
+                                color = MaterialTheme.colorScheme.surface.copy(alpha = 0.7f),
+                                shape = CircleShape
+                            )
+                    ) {
+                        IconButton(
+                            onClick = { showMenu = true },
+                            modifier = Modifier.size(32.dp)
+                        ) {
+                            Icon(
+                                Icons.Default.MoreVert,
+                                contentDescription = "Opciones",
+                                tint = MaterialTheme.colorScheme.onSurface,
+                                modifier = Modifier.size(20.dp)
+                            )
+                        }
+
+                        DropdownMenu(
+                            expanded = showMenu,
+                            onDismissRequest = { showMenu = false }
+                        ) {
+                            DropdownMenuItem(
+                                text = {
+                                    Row(
+                                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.Edit,
+                                            contentDescription = null,
+                                            tint = MaterialTheme.colorScheme.primary
+                                        )
+                                        Text("Editar")
+                                    }
+                                },
+                                onClick = {
+                                    showMenu = false
+                                    onNavigateToEdit(producto)
+                                }
+                            )
+                            DropdownMenuItem(
+                                text = {
+                                    Row(
+                                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.Delete,
+                                            contentDescription = null,
+                                            tint = MaterialTheme.colorScheme.error
+                                        )
+                                        Text(
+                                            "Eliminar",
+                                            color = MaterialTheme.colorScheme.error
+                                        )
+                                    }
+                                },
+                                onClick = {
+                                    showMenu = false
+                                    showDeleteDialog = true
+                                }
+                            )
+                        }
+                    }
                 }
+            }
+
+            Column(
+                modifier = Modifier
+                    .padding(12.dp)
+                    .fillMaxWidth()
+            ) {
+                Text(
+                    text = producto.nombre,
+                    style = MaterialTheme.typography.titleMedium,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(
+                    text = "$ ${String.format("%.2f", producto.precio)}",
+                    style = MaterialTheme.typography.titleSmall,
+                    color = MaterialTheme.colorScheme.primary
+                )
+                Text(
+                    text = producto.descripcion,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis
+                )
             }
         }
     }
@@ -381,7 +521,10 @@ fun GridProductCard(producto: Producto, viewModel: ProductoViewModel) {
                             viewModel.eliminarProducto(producto.id)
                         }
                         showDeleteDialog = false
-                    }
+                    },
+                    colors = ButtonDefaults.textButtonColors(
+                        contentColor = MaterialTheme.colorScheme.error
+                    )
                 ) {
                     Text("Eliminar")
                 }
@@ -394,21 +537,29 @@ fun GridProductCard(producto: Producto, viewModel: ProductoViewModel) {
         )
     }
 }
-
 @Composable
-fun CompactProductList(productos: List<Producto>, viewModel: ProductoViewModel) {
+fun CompactProductList(
+    productos: List<Producto>,
+    viewModel: ProductoViewModel,
+    onNavigateToEdit: (Producto) -> Unit
+) {
     LazyColumn(
         contentPadding = PaddingValues(16.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
         items(productos) { producto ->
-            CompactProductCard(producto, viewModel)
+            CompactProductCard(producto, viewModel, onNavigateToEdit)
         }
     }
 }
 
 @Composable
-fun CompactProductCard(producto: Producto, viewModel: ProductoViewModel) {
+fun CompactProductCard(
+    producto: Producto,
+    viewModel: ProductoViewModel,
+    onNavigateToEdit: (Producto) -> Unit
+) {
+    var showMenu by remember { mutableStateOf(false) }
     var showDeleteDialog by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
 
@@ -418,11 +569,62 @@ fun CompactProductCard(producto: Producto, viewModel: ProductoViewModel) {
             .height(100.dp)
     ) {
         Box(modifier = Modifier.fillMaxSize()) {
-            IconButton(
-                onClick = { showDeleteDialog = true },
-                modifier = Modifier.align(Alignment.TopEnd)
+            // Menú de opciones
+            Box(
+                modifier = Modifier
+                    .align(Alignment.TopEnd)
+                    .padding(4.dp)
             ) {
-                Icon(Icons.Default.MoreVert, contentDescription = "Opciones")
+                IconButton(onClick = { showMenu = true }) {
+                    Icon(Icons.Default.MoreVert, contentDescription = "Opciones")
+                }
+
+                DropdownMenu(
+                    expanded = showMenu,
+                    onDismissRequest = { showMenu = false }
+                ) {
+                    DropdownMenuItem(
+                        text = {
+                            Row(
+                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Edit,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.primary
+                                )
+                                Text("Editar")
+                            }
+                        },
+                        onClick = {
+                            showMenu = false
+                            onNavigateToEdit(producto)
+                        }
+                    )
+                    DropdownMenuItem(
+                        text = {
+                            Row(
+                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Delete,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.error
+                                )
+                                Text(
+                                    "Eliminar",
+                                    color = MaterialTheme.colorScheme.error
+                                )
+                            }
+                        },
+                        onClick = {
+                            showMenu = false
+                            showDeleteDialog = true
+                        }
+                    )
+                }
             }
 
             Row(
@@ -485,7 +687,10 @@ fun CompactProductCard(producto: Producto, viewModel: ProductoViewModel) {
                             viewModel.eliminarProducto(producto.id)
                         }
                         showDeleteDialog = false
-                    }
+                    },
+                    colors = ButtonDefaults.textButtonColors(
+                        contentColor = MaterialTheme.colorScheme.error
+                    )
                 ) {
                     Text("Eliminar")
                 }
@@ -500,19 +705,28 @@ fun CompactProductCard(producto: Producto, viewModel: ProductoViewModel) {
 }
 
 @Composable
-fun SimpleProductList(productos: List<Producto>, viewModel: ProductoViewModel) {
+fun SimpleProductList(
+    productos: List<Producto>,
+    viewModel: ProductoViewModel,
+    onNavigateToEdit: (Producto) -> Unit
+) {
     LazyColumn(
         contentPadding = PaddingValues(16.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
         items(productos) { producto ->
-            SimpleProductCard(producto, viewModel)
+            SimpleProductCard(producto, viewModel, onNavigateToEdit)
         }
     }
 }
 
 @Composable
-fun SimpleProductCard(producto: Producto, viewModel: ProductoViewModel) {
+fun SimpleProductCard(
+    producto: Producto,
+    viewModel: ProductoViewModel,
+    onNavigateToEdit: (Producto) -> Unit
+) {
+    var showMenu by remember { mutableStateOf(false) }
     var showDeleteDialog by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
 
@@ -521,45 +735,98 @@ fun SimpleProductCard(producto: Producto, viewModel: ProductoViewModel) {
             .fillMaxWidth()
             .height(72.dp)
     ) {
-        Box(modifier = Modifier.fillMaxSize()) {
-            IconButton(
-                onClick = { showDeleteDialog = true },
-                modifier = Modifier.align(Alignment.CenterEnd)
+        Row(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(horizontal = 16.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Column(
+                modifier = Modifier
+                    .weight(1f)
+                    .padding(end = 8.dp)
             ) {
-                Icon(Icons.Default.MoreVert, contentDescription = "Opciones")
+                Text(
+                    text = producto.nombre,
+                    style = MaterialTheme.typography.titleMedium,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                Text(
+                    text = producto.descripcion,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
             }
 
-            Row(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(horizontal = 16.dp),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Column(
-                    modifier = Modifier
-                        .weight(1f)
-                        .padding(end = 48.dp) // Espacio para el botón de opciones
+            Text(
+                text = "$ ${String.format("%.2f", producto.precio)}",
+                style = MaterialTheme.typography.titleMedium,
+                color = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.padding(horizontal = 8.dp)
+            )
+
+            Box {
+                IconButton(
+                    onClick = { showMenu = true },
+                    modifier = Modifier.size(32.dp)
                 ) {
-                    Text(
-                        text = producto.nombre,
-                        style = MaterialTheme.typography.titleMedium,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                    Text(
-                        text = producto.descripcion,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
+                    Icon(
+                        Icons.Default.MoreVert,
+                        contentDescription = "Opciones",
+                        modifier = Modifier.size(20.dp)
                     )
                 }
-                Text(
-                    text = "$ ${String.format("%.2f", producto.precio)}",
-                    style = MaterialTheme.typography.titleMedium,
-                    color = MaterialTheme.colorScheme.primary
-                )
+
+                DropdownMenu(
+                    expanded = showMenu,
+                    onDismissRequest = { showMenu = false }
+                ) {
+                    DropdownMenuItem(
+                        text = {
+                            Row(
+                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Edit,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.primary
+                                )
+                                Text("Editar")
+                            }
+                        },
+                        onClick = {
+                            showMenu = false
+                            onNavigateToEdit(producto)
+                        }
+                    )
+                    DropdownMenuItem(
+                        text = {
+                            Row(
+                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Delete,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.error
+                                )
+                                Text(
+                                    "Eliminar",
+                                    color = MaterialTheme.colorScheme.error
+                                )
+                            }
+                        },
+                        onClick = {
+                            showMenu = false
+                            showDeleteDialog = true
+                        }
+                    )
+                }
             }
         }
     }
@@ -576,7 +843,10 @@ fun SimpleProductCard(producto: Producto, viewModel: ProductoViewModel) {
                             viewModel.eliminarProducto(producto.id)
                         }
                         showDeleteDialog = false
-                    }
+                    },
+                    colors = ButtonDefaults.textButtonColors(
+                        contentColor = MaterialTheme.colorScheme.error
+                    )
                 ) {
                     Text("Eliminar")
                 }
