@@ -66,7 +66,7 @@ fun ProductListScreen(
     onNavigateToEditProduct: (Producto) -> Unit
 ) {
     var searchQuery by remember { mutableStateOf("") }
-    var selectedCategory by remember { mutableStateOf<String?>(null) }
+    var selectedCategories by remember { mutableStateOf(setOf<String>()) }
     var currentViewType by remember { mutableStateOf(ViewType.DETAILED) }
 
 
@@ -84,9 +84,9 @@ fun ProductListScreen(
     val filteredAndSortedProducts = productos
         .filter { producto ->
             val matchesSearch = producto.nombre.contains(searchQuery, ignoreCase = true) ||
-                    producto.idNumerico.toString().equals(searchQuery) // Búsqueda por ID
-            val matchesCategory = selectedCategory == null ||
-                    producto.categorias.contains(selectedCategory)
+                    producto.idNumerico.toString().equals(searchQuery)
+            val matchesCategory = selectedCategories.isEmpty() || // Si no hay categorías seleccionadas, muestra todos
+                    selectedCategories.all { it in producto.categorias } // El producto debe tener TODAS las categorías seleccionadas
             matchesSearch && matchesCategory
         }
         .sortedWith(
@@ -265,8 +265,11 @@ fun ProductListScreen(
             ) {
                 item {
                     FilterChip(
-                        selected = selectedCategory == null,
-                        onClick = { selectedCategory = null },
+                        selected = selectedCategories.isEmpty(),
+                        onClick = {
+                            // Al hacer clic en "Todos", se limpian todas las categorías seleccionadas
+                            selectedCategories = emptySet()
+                        },
                         label = { Text("Todos") },
                         colors = FilterChipDefaults.filterChipColors(
                             selectedContainerColor = MaterialTheme.colorScheme.primaryContainer,
@@ -277,9 +280,18 @@ fun ProductListScreen(
 
                 items(categorias) { categoria ->
                     FilterChip(
-                        selected = selectedCategory == categoria.id,
+                        selected = selectedCategories.contains(categoria.id),
                         onClick = {
-                            selectedCategory = if (selectedCategory == categoria.id) null else categoria.id
+                            selectedCategories = when {
+                                // Si ya está seleccionada, la quitamos
+                                selectedCategories.contains(categoria.id) -> {
+                                    selectedCategories.minus(categoria.id)
+                                }
+                                // Si no está seleccionada, la añadimos
+                                else -> {
+                                    selectedCategories.plus(categoria.id)
+                                }
+                            }
                         },
                         label = { Text(categoria.nombre) },
                         colors = FilterChipDefaults.filterChipColors(

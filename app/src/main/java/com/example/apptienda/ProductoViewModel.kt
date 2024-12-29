@@ -39,6 +39,7 @@ class ProductoViewModel(
         viewModelScope.launch {
             try {
                 db.collection("categorias")
+                    .orderBy("nombre", Query.Direction.ASCENDING)
                     .addSnapshotListener { snapshot, e ->
                         if (e != null) return@addSnapshotListener
 
