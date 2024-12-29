@@ -628,45 +628,11 @@ private fun needsExpansion(
         }
         // Diálogo de vista previa de imagen con zoom
         if (showImagePreview) {
-            Dialog(
-                onDismissRequest = { showImagePreview = false },
-                properties = DialogProperties(
-                    dismissOnBackPress = true,
-                    dismissOnClickOutside = true
-                )
-            ) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(16.dp)
-                        .background(
-                            color = MaterialTheme.colorScheme.surface,
-                            shape = RoundedCornerShape(8.dp)
-                        )
-                ) {
-                    ZoomableImage(
-                        imageUrl = if (producto.imageUrl.isNullOrEmpty()) {
-                            R.drawable.placeholder.toString()
-                        } else {
-                            producto.imageUrl.replace("http://", "https://")
-                        },
-                        contentDescription = producto.nombre
-                    )
+            dialogoVistaPrevia(
+                ondismiss = { showImagePreview = false },
+                imageUrl = producto.imageUrl.replace("http://", "https://")
+            )
 
-                    IconButton(
-                        onClick = { showImagePreview = false },
-                        modifier = Modifier
-                            .align(Alignment.TopEnd)
-                            .padding(8.dp)
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Close,
-                            contentDescription = "Cerrar",
-                            tint = MaterialTheme.colorScheme.onSurface
-                        )
-                    }
-                }
-            }
         }
     }
 
@@ -980,48 +946,52 @@ fun GridProductCard(
     }
 
     if (showImagePreview) {
-        Dialog(
-            onDismissRequest = { showImagePreview = false },
-            properties = DialogProperties(
-                dismissOnBackPress = true,
-                dismissOnClickOutside = true,
-                usePlatformDefaultWidth = false
-            )
-        ) {
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(0.dp)
-                    .background(
-                        color = MaterialTheme.colorScheme.surface,
-                        shape = RoundedCornerShape(8.dp)
-                    )
-            ) {
-                ZoomableImage(
-                    imageUrl = producto.imageUrl.replace("http://", "https://"),
-                    contentDescription = producto.nombre
-                )
+        dialogoVistaPrevia(
+            ondismiss = { showImagePreview = false },
+            imageUrl = producto.imageUrl.replace("http://", "https://")
+        )
 
-                IconButton(
-                    onClick = { showImagePreview = false },
-                    modifier = Modifier
-                        .align(Alignment.TopEnd)
-                        .padding(8.dp)
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Close,
-                        contentDescription = "Cerrar",
-                        tint = MaterialTheme.colorScheme.onSurface
-                    )
-                }
-            }
-        }
     }
 }
 
 @Composable
-fun dialogoVistaPrevia(modifier: Modifier = Modifier) {
+fun dialogoVistaPrevia(ondismiss: ()->Unit, imageUrl: String,) {
+    Dialog(
+        onDismissRequest = ondismiss,
+        properties = DialogProperties(
+            dismissOnBackPress = true,
+            dismissOnClickOutside = true,
+            usePlatformDefaultWidth = false
+        )
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(0.dp)
+                .background(
+                    color = MaterialTheme.colorScheme.surface,
+                    shape = RoundedCornerShape(8.dp)
+                )
+        ) {
+            ZoomableImage(
+                imageUrl = imageUrl,
+                contentDescription = ""
+            )
 
+            IconButton(
+                onClick = ondismiss,
+                modifier = Modifier
+                    .align(Alignment.TopEnd)
+                    .padding(8.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Close,
+                    contentDescription = "Cerrar",
+                    tint = MaterialTheme.colorScheme.onSurface
+                )
+            }
+        }
+    }
 }
 
 
@@ -1282,41 +1252,11 @@ fun CompactProductCard(
                 }
 
                 if (showImagePreview) {
-                    Dialog(
-                        onDismissRequest = { showImagePreview = false },
-                        properties = DialogProperties(
-                            dismissOnBackPress = true,
-                            dismissOnClickOutside = true
-                        )
-                    ) {
-                        Box(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(16.dp)
-                                .background(
-                                    color = MaterialTheme.colorScheme.surface,
-                                    shape = RoundedCornerShape(8.dp)
-                                )
-                        ) {
-                            ZoomableImage(
-                                imageUrl = producto.imageUrl.replace("http://", "https://"),
-                                contentDescription = producto.nombre
-                            )
+                    dialogoVistaPrevia(
+                        ondismiss = { showImagePreview = false },
+                        imageUrl = producto.imageUrl.replace("http://", "https://")
+                    )
 
-                            IconButton(
-                                onClick = { showImagePreview = false },
-                                modifier = Modifier
-                                    .align(Alignment.TopEnd)
-                                    .padding(8.dp)
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.Close,
-                                    contentDescription = "Cerrar",
-                                    tint = MaterialTheme.colorScheme.onSurface
-                                )
-                            }
-                        }
-                    }
                 }
             }
             }
