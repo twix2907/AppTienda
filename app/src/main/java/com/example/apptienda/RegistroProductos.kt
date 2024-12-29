@@ -73,25 +73,48 @@ import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.ime
+import androidx.compose.foundation.layout.isImeVisible
+import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Search
+import androidx.compose.material3.AssistChip
+import androidx.compose.material3.BottomSheetDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Divider
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.ExposedDropdownMenuBox
+import androidx.compose.material3.ExposedDropdownMenuDefaults
 import androidx.compose.material3.FilterChip
+import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedTextFieldDefaults
+import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.layout
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.zIndex
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -118,10 +141,14 @@ fun AddProductScreen(
     var errorMessage by remember { mutableStateOf("") }
     val view = LocalView.current
 
+
+
+
     var selectedCategorias by remember { mutableStateOf<Set<String>>(emptySet()) }
     var showCategoriasMenu by remember { mutableStateOf(false) }
     var showNewCategoryDialog by remember { mutableStateOf(false) }
     val categorias by viewModel.categorias.collectAsState()
+
     var showSuccessDialog by remember { mutableStateOf(false) }
     var shouldNavigateBack by remember { mutableStateOf(false) }
     // Estado para la animación del botón
@@ -129,6 +156,10 @@ fun AddProductScreen(
 
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
+
+
+    var categoriaSearchQuery by remember { mutableStateOf("") }
+    var filteredCategorias by remember { mutableStateOf(categorias) }
 
     // Para seleccionar de galería
     val galleryLauncher = rememberLauncherForActivityResult(
@@ -378,163 +409,15 @@ fun AddProductScreen(
                         prefix = { Text("$") }
                     )
                     // Selector de categorías con menú desplegable anclado
-                    Box(
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        OutlinedCard(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clickable {
-                                    // Cerrar el teclado antes de abrir el menú
-                                    val inputMethodManager = context.getSystemService(Context.INPUT_METHOD_SERVICE) as InputMethodManager
-                                    inputMethodManager.hideSoftInputFromWindow(view.windowToken, 0)
-
-                                    // Pequeña pausa antes de abrir el menú
-                                    scope.launch {
-                                        delay(100)
-                                        showCategoriasMenu = true
-                                    }
-                                }
-                        ) {
-                            Column(
-                                modifier = Modifier.padding(16.dp)
-                            ) {
-                                Text(
-                                    text = "Categorías",
-                                    style = MaterialTheme.typography.labelMedium
-                                )
-
-                                if (selectedCategorias.isEmpty()) {
-                                    Text(
-                                        text = "Selecciona categorías",
-                                        style = MaterialTheme.typography.bodyMedium,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                                    )
-                                } else {
-                                    FlowRow(
-                                        modifier = Modifier.fillMaxWidth(),
-                                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                                    ) {
-                                        selectedCategorias.forEach { categoriaId ->
-                                            categorias.find { it.id == categoriaId }?.let { categoria ->
-                                                FilterChip(
-                                                    selected = true,
-                                                    onClick = {
-                                                        selectedCategorias = selectedCategorias - categoriaId
-                                                    },
-                                                    label = { Text(categoria.nombre) },
-                                                    trailingIcon = {
-                                                        Icon(
-                                                            Icons.Default.Close,
-                                                            contentDescription = "Eliminar"
-                                                        )
-                                                    }
-                                                )
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-                        }
-
-                        DropdownMenu(
-                            expanded = showCategoriasMenu,
-                            onDismissRequest = { showCategoriasMenu = false },
-                            modifier = Modifier.fillMaxWidth(0.8f)
-                        ) {
-                            categorias.forEach { categoria ->
-                                var showContextMenu by remember { mutableStateOf(false) }
-
-                                Box(
-                                    modifier = Modifier.fillMaxWidth()
-                                ) {
-                                    Row(
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .combinedClickable(
-                                                onClick = {
-                                                    selectedCategorias = if (selectedCategorias.contains(categoria.id)) {
-                                                        selectedCategorias - categoria.id
-                                                    } else {
-                                                        selectedCategorias + categoria.id
-                                                    }
-                                                },
-                                                onLongClick = { showContextMenu = true }
-                                            )
-                                            .padding(16.dp),
-                                        horizontalArrangement = Arrangement.SpaceBetween,
-                                        verticalAlignment = Alignment.CenterVertically
-                                    ) {
-                                        Row(
-                                            horizontalArrangement = Arrangement.spacedBy(8.dp),
-                                            verticalAlignment = Alignment.CenterVertically
-                                        ) {
-                                            if (selectedCategorias.contains(categoria.id)) {
-                                                Icon(
-                                                    imageVector = Icons.Default.Check,
-                                                    contentDescription = null,
-                                                    tint = MaterialTheme.colorScheme.primary
-                                                )
-                                            }
-                                            Text(
-                                                text = categoria.nombre,
-                                                color = if (selectedCategorias.contains(categoria.id)) {
-                                                    MaterialTheme.colorScheme.primary
-                                                } else {
-                                                    MaterialTheme.colorScheme.onSurface
-                                                }
-                                            )
-                                        }
-                                    }
-
-                                    DropdownMenu(
-                                        expanded = showContextMenu,
-                                        onDismissRequest = { showContextMenu = false }
-                                    ) {
-                                        DropdownMenuItem(
-                                            text = { Text("Eliminar categoría", color = MaterialTheme.colorScheme.error) },
-                                            onClick = {
-                                                showContextMenu = false
-                                                scope.launch {
-                                                    viewModel.eliminarCategoria(categoria.id)
-                                                        .onSuccess {
-                                                            if (selectedCategorias.contains(categoria.id)) {
-                                                                selectedCategorias = selectedCategorias - categoria.id
-                                                            }
-                                                        }
-                                                        .onFailure { e ->
-                                                            errorMessage = "Error al eliminar la categoría: ${e.message}"
-                                                            showErrorDialog = true
-                                                        }
-                                                }
-                                            },
-                                            leadingIcon = {
-                                                Icon(
-                                                    Icons.Default.Close,
-                                                    contentDescription = "Eliminar",
-                                                    tint = MaterialTheme.colorScheme.error
-                                                )
-                                            }
-                                        )
-                                    }
-                                }
-                            }
-
-                            Divider(modifier = Modifier.padding(vertical = 4.dp))
-
-                            DropdownMenuItem(
-                                text = { Text("Agregar nueva categoría") },
-                                onClick = { showNewCategoryDialog = true },
-                                leadingIcon = {
-                                    Icon(
-                                        Icons.Default.Add,
-                                        contentDescription = null,
-                                        tint = MaterialTheme.colorScheme.primary
-                                    )
-                                }
-                            )
-                        }
-                    }
+                    CategoriesSelector(
+                        categoriaSearchQuery = categoriaSearchQuery,
+                        onQueryChange = { categoriaSearchQuery = it },
+                        selectedCategorias = selectedCategorias,
+                        onSelectionChange = { selectedCategorias = it },
+                        categorias = categorias,
+                        onAddNewCategory = { showNewCategoryDialog = true }, // Este ya no se usará pero lo mantenemos por compatibilidad
+                        viewModel = viewModel // Añadir el ViewModel
+                    )
 
 // Diálogo para nueva categoría
                     if (showNewCategoryDialog) {
@@ -710,6 +593,125 @@ fun AddProductScreen(
 }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun CategoriesSelector(
+    categoriaSearchQuery: String,
+    onQueryChange: (String) -> Unit,
+    selectedCategorias: Set<String>,
+    onSelectionChange: (Set<String>) -> Unit,
+    categorias: List<Categoria>,
+    onAddNewCategory: () -> Unit,
+    viewModel: ProductoViewModel // Añadir el ViewModel como parámetro
+) {
+    var expanded by remember { mutableStateOf(false) }
+    val scope = rememberCoroutineScope()
+
+    Column {
+        ExposedDropdownMenuBox(
+            expanded = expanded,
+            onExpandedChange = { expanded = it }
+        ) {
+            OutlinedTextField(
+                value = categoriaSearchQuery,
+                onValueChange = {
+                    onQueryChange(it)
+                    expanded = true
+                },
+                label = { Text("Categorías") },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .menuAnchor(),
+                singleLine = true,
+                trailingIcon = {
+                    ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded)
+                }
+            )
+
+            ExposedDropdownMenu(
+                expanded = expanded,
+                onDismissRequest = {
+                    expanded = false
+                    onQueryChange("")
+                },
+                modifier = Modifier.exposedDropdownSize()
+            ) {
+                // Opción de agregar siempre visible al inicio
+                DropdownMenuItem(
+                    text = {
+                        Text(
+                            if (categoriaSearchQuery.isBlank()) "Agregar nueva categoría"
+                            else "Agregar \"$categoriaSearchQuery\""
+                        )
+                    },
+                    leadingIcon = { Icon(Icons.Default.Add, contentDescription = null) },
+                    onClick = {
+                        if (categoriaSearchQuery.isNotBlank()) {
+                            scope.launch {
+                                viewModel.agregarCategoria(
+                                    nombre = categoriaSearchQuery,
+                                    descripcion = ""
+                                ).onSuccess { categoriaId ->
+                                    onSelectionChange(selectedCategorias + categoriaId)
+                                    expanded = false
+                                    onQueryChange("")
+                                }
+                            }
+                        }
+                    }
+                )
+
+                Divider()
+
+                categorias.filter {
+                    it.nombre.contains(categoriaSearchQuery, ignoreCase = true)
+                }.forEach { categoria ->
+                    DropdownMenuItem(
+                        text = { Text(categoria.nombre) },
+                        onClick = {
+                            onSelectionChange(
+                                if (selectedCategorias.contains(categoria.id)) {
+                                    selectedCategorias - categoria.id
+                                } else {
+                                    selectedCategorias + categoria.id
+                                }
+                            )
+                        },
+                        trailingIcon = if (selectedCategorias.contains(categoria.id)) {
+                            { Icon(Icons.Default.Check, contentDescription = null) }
+                        } else null
+                    )
+                }
+            }
+        }
+
+        if (selectedCategorias.isNotEmpty()) {
+            LazyRow(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 8.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                items(
+                    selectedCategorias.mapNotNull { categoriaId ->
+                        categorias.find { it.id == categoriaId }
+                    }
+                ) { categoria ->
+                    FilterChip(
+                        selected = true,
+                        onClick = {
+                            onSelectionChange(selectedCategorias - categoria.id)
+                        },
+                        label = { Text(categoria.nombre) },
+                        trailingIcon = {
+                            Icon(Icons.Default.Close, contentDescription = "Eliminar")
+                        }
+                    )
+                }
+            }
+        }
+    }
+}
 // Función auxiliar para crear el archivo de imagen
 fun createImageFileUri(context: Context): Uri {
     val timeStamp = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.getDefault()).format(Date())

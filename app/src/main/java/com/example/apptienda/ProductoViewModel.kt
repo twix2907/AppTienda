@@ -39,13 +39,14 @@ class ProductoViewModel(
         viewModelScope.launch {
             try {
                 db.collection("categorias")
-                    .orderBy("nombre", Query.Direction.ASCENDING)
                     .addSnapshotListener { snapshot, e ->
                         if (e != null) return@addSnapshotListener
 
-                        val categoriasList = snapshot?.documents?.map { doc ->
+                        val categoriasList = snapshot?.documents?.mapNotNull { doc ->
                             doc.toObject(Categoria::class.java)?.copy(id = doc.id)
-                        }?.filterNotNull() ?: emptyList()
+                        }?.sortedWith(
+                            compareBy { it.nombre.lowercase() }
+                        ) ?: emptyList()
 
                         _categorias.value = categoriasList
                     }
