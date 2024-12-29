@@ -83,11 +83,21 @@ fun ProductListScreen(
     // Filtrar y ordenar productos
     val filteredAndSortedProducts = productos
         .filter { producto ->
+            val productCategoryNames = producto.categorias.mapNotNull { catId ->
+                // Busca en la lista global de categorias la que tenga ID = catId
+                // y devuelve solo el nombre.
+                categorias.find { it.id == catId }?.nombre
+            }
             val matchesSearch = producto.nombre.contains(searchQuery, ignoreCase = true) ||
                     producto.idNumerico.toString().equals(searchQuery)
+            val matchesCategoryName = productCategoryNames.any { catName ->
+                catName.contains(searchQuery, ignoreCase = true)
+            }
+
+
             val matchesCategory = selectedCategories.isEmpty() || // Si no hay categorías seleccionadas, muestra todos
                     selectedCategories.all { it in producto.categorias } // El producto debe tener TODAS las categorías seleccionadas
-            matchesSearch && matchesCategory
+            matchesSearch && matchesCategory || matchesCategory && matchesCategoryName
         }
         .sortedWith(
             when (currentSortType) {
@@ -682,8 +692,9 @@ private fun ZoomableImage(
 
     Box(
         modifier = Modifier
-            .fillMaxWidth()
+            .fillMaxSize()
             .padding(16.dp)
+
     ) {
         AsyncImage(
             model = ImageRequest.Builder(LocalContext.current)
@@ -693,6 +704,7 @@ private fun ZoomableImage(
             contentDescription = contentDescription,
             modifier = Modifier
                 .fillMaxWidth()
+                .align(Alignment.Center)
                 .graphicsLayer {
                     scaleX = scale
                     scaleY = scale
@@ -972,13 +984,14 @@ fun GridProductCard(
             onDismissRequest = { showImagePreview = false },
             properties = DialogProperties(
                 dismissOnBackPress = true,
-                dismissOnClickOutside = true
+                dismissOnClickOutside = true,
+                usePlatformDefaultWidth = false
             )
         ) {
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(16.dp)
+                    .padding(0.dp)
                     .background(
                         color = MaterialTheme.colorScheme.surface,
                         shape = RoundedCornerShape(8.dp)
@@ -1005,6 +1018,13 @@ fun GridProductCard(
         }
     }
 }
+
+@Composable
+fun dialogoVistaPrevia(modifier: Modifier = Modifier) {
+
+}
+
+
 @Composable
 fun CompactProductList(
     productos: List<Producto>,
