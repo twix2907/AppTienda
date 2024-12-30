@@ -54,6 +54,16 @@ fun BarcodeScannerScreen(
         ) == PackageManager.PERMISSION_GRANTED
     }
 
+    DisposableEffect(lifecycleOwner) {
+        onDispose {
+            try {
+                camera?.cameraControl?.enableTorch(false)
+                cameraProvider.get()?.unbindAll()
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
+        }
+    }
     Box(
         modifier = Modifier
             .fillMaxSize()
