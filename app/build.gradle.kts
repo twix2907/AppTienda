@@ -59,6 +59,11 @@ dependencies {
     val nav_version = "2.8.4"
 
 
+
+    // Para generar códigos de barras
+    implementation("com.google.zxing:core:3.4.1")
+    // Para crear PDFs
+    implementation("com.itextpdf:itext7-core:7.2.5")
     // ML Kit para escaneo de códigos de barras
     implementation ("com.google.mlkit:barcode-scanning:17.1.0")
 

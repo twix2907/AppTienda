@@ -1,6 +1,11 @@
 package com.example.apptienda
 
 import android.content.Context
+import android.content.Intent
+
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.State
+
 import android.net.Uri
 import androidx.annotation.Keep
 import androidx.lifecycle.ViewModel
@@ -14,10 +19,10 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
 import kotlinx.coroutines.withContext
-import java.util.UUID
+
 @Keep
 class ProductoViewModel(
-    private val cloudinaryRepository: CloudinaryRepository // Nuevo
+    private val cloudinaryRepository: CloudinaryRepository
 ) : ViewModel() {
     private val db = FirebaseFirestore.getInstance()
 
@@ -27,9 +32,19 @@ class ProductoViewModel(
     private val _categorias = MutableStateFlow<List<Categoria>>(emptyList())
     val categorias: StateFlow<List<Categoria>> = _categorias
 
-    // Nuevo StateFlow para rastrear las cargas de imágenes pendientes
     private val _pendingUploads = MutableStateFlow<Map<String, Boolean>>(emptyMap())
     val pendingUploads: StateFlow<Map<String, Boolean>> = _pendingUploads
+
+    // Modificado: Ahora almacena IDs en lugar de objetos Producto
+    private val _selectedProductIds = mutableStateOf<Set<String>>(emptySet())
+    val selectedProductIds: State<Set<String>> = _selectedProductIds
+
+    private val _isSelectionMode = mutableStateOf(false)
+    val isSelectionMode: State<Boolean> = _isSelectionMode
+
+
+    private val _uiMessage = MutableStateFlow<String?>(null)
+    val uiMessage: StateFlow<String?> = _uiMessage
 
     init {
         cargarCategorias()
@@ -56,6 +71,7 @@ class ProductoViewModel(
             }
         }
     }
+
     fun getCategoriaById(id: String): Categoria? {
         return _categorias.value.find { it.id == id }
     }
@@ -88,7 +104,6 @@ class ProductoViewModel(
                 producto.imageUrl
             }
 
-            // Asegurarnos de mantener todos los campos, especialmente el idNumerico
             val productoActualizado = producto.copy(
                 imageUrl = imageUrl,
                 id = producto.id,
@@ -101,7 +116,7 @@ class ProductoViewModel(
 
             db.collection("productos")
                 .document(producto.id)
-                .set(productoActualizado, SetOptions.merge()) // Usar merge para mantener campos existentes
+                .set(productoActualizado, SetOptions.merge())
                 .await()
 
             Result.success(Unit)
@@ -109,6 +124,7 @@ class ProductoViewModel(
             Result.failure(e)
         }
     }
+
     private fun cargarProductos() {
         viewModelScope.launch {
             try {
@@ -137,12 +153,10 @@ class ProductoViewModel(
         context: Context
     ): Result<String> {
         return try {
-            // Obtener ID en segundo plano
             val idNumerico = withContext(Dispatchers.IO) {
                 obtenerSiguienteId()
             }
 
-            // Crear el producto sin imagen inicialmente
             val producto = Producto(
                 idNumerico = idNumerico,
                 nombre = nombre,
@@ -152,14 +166,12 @@ class ProductoViewModel(
                 categorias = categorias
             )
 
-            // Guardar el producto en segundo plano
             val docRef = withContext(Dispatchers.IO) {
                 db.collection("productos")
                     .add(producto)
                     .await()
             }
 
-            // Si hay imagen, iniciar carga en segundo plano
             imageUri?.let { uri ->
                 viewModelScope.launch(Dispatchers.IO) {
                     try {
@@ -169,7 +181,6 @@ class ProductoViewModel(
                             .update("imageUrl", imageUrl)
                             .await()
                     } catch (e: Exception) {
-                        // Manejar error de carga de imagen
                         e.printStackTrace()
                     }
                 }
@@ -180,11 +191,11 @@ class ProductoViewModel(
             Result.failure(e)
         }
     }
-    // Función para verificar si hay cargas pendientes
+
     fun hasPendingUploads(): Boolean {
         return _pendingUploads.value.isNotEmpty()
     }
-    // Esta función se mantiene igual
+
     suspend fun eliminarProducto(productoId: String): Result<Unit> {
         return try {
             db.collection("productos")
@@ -197,7 +208,6 @@ class ProductoViewModel(
         }
     }
 
-
     suspend fun eliminarCategoria(categoriaId: String): Result<Unit> {
         return try {
             db.collection("categorias")
@@ -209,24 +219,18 @@ class ProductoViewModel(
             Result.failure(e)
         }
     }
+
     private suspend fun obtenerSiguienteId(): Long {
         return try {
-            // Obtener el documento que almacena el contador
             val contadorDoc = db.collection("contadores").document("productos")
-
-            // Realizar una transacción para incrementar el contador de forma segura
             db.runTransaction { transaction ->
                 val snapshot = transaction.get(contadorDoc)
                 val currentId = snapshot.getLong("ultimoId") ?: -1
                 val nextId = currentId + 1
-
-                // Actualizar el contador
                 transaction.set(contadorDoc, hashMapOf("ultimoId" to nextId))
-
                 nextId
             }.await()
         } catch (e: Exception) {
-            // Si hay algún error, intentar obtener el máximo ID actual y sumar 1
             val maxId = db.collection("productos")
                 .orderBy("idNumerico", Query.Direction.DESCENDING)
                 .limit(1)
@@ -235,12 +239,12 @@ class ProductoViewModel(
                 .documents
                 .firstOrNull()
                 ?.getLong("idNumerico") ?: -1
-
             maxId + 1
         }
     }
+
     fun getNombresSimilares(nombre: String): List<String> {
-        if (nombre.length < 3) return emptyList() // Solo buscar si hay al menos 3 caracteres
+        if (nombre.length < 3) return emptyList()
 
         return productos.value
             .filter { producto ->
@@ -250,5 +254,124 @@ class ProductoViewModel(
             .map { it.nombre }
     }
 
+    // Funciones modificadas para el manejo de selección usando IDs
+    fun toggleSelectionMode() {
+        _isSelectionMode.value = !_isSelectionMode.value
+        if (!_isSelectionMode.value) {
+            clearSelection()
+        }
+    }
 
+    fun toggleProductSelection(producto: Producto) {
+        val currentSelection = _selectedProductIds.value.toMutableSet()
+        if (currentSelection.contains(producto.id)) {
+            currentSelection.remove(producto.id)
+        } else {
+            currentSelection.add(producto.id)
+        }
+        _selectedProductIds.value = currentSelection
+
+        // Actualizar el modo de selección
+        if (currentSelection.isEmpty()) {
+            _isSelectionMode.value = false
+        } else if (!_isSelectionMode.value) {
+            _isSelectionMode.value = true
+        }
+    }
+
+    fun isProductSelected(producto: Producto): Boolean {
+        return _selectedProductIds.value.contains(producto.id)
+    }
+
+    fun selectAllProducts() {
+        _selectedProductIds.value = _productos.value.map { it.id }.toSet()
+    }
+
+    fun clearSelection() {
+        _selectedProductIds.value = emptySet()
+        _isSelectionMode.value = false
+    }
+
+    // Función modificada para usar IDs en la generación de códigos de barras
+    fun generateBarcodes(context: Context) {
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                val selectedIds = _selectedProductIds.value
+                if (selectedIds.isEmpty()) {
+                    _uiMessage.value = "No hay productos seleccionados"
+                    return@launch
+                }
+
+                // Obtener los productos completos a partir de los IDs seleccionados
+                val selectedProducts = _productos.value.filter { it.id in selectedIds }
+
+                val generator = BarcodeGenerator(context)
+                val pdfUri = generator.generateBarcodesAndPDF(selectedProducts)
+
+                withContext(Dispatchers.Main) {
+                    showPDFOptions(context, pdfUri)
+                    clearSelection()
+                    _uiMessage.value = "PDF generado correctamente"
+                }
+            } catch (e: Exception) {
+                withContext(Dispatchers.Main) {
+                    _uiMessage.value = "Error al generar PDF: ${e.message}"
+                }
+            }
+        }
+    }
+
+    fun clearMessage() {
+        _uiMessage.value = null
+    }
+
+
+    private fun sharePDF(context: Context, pdfUri: Uri) {
+        try {
+            val intent = Intent().apply {
+                action = Intent.ACTION_SEND
+                type = "application/pdf"
+                putExtra(Intent.EXTRA_STREAM, pdfUri)
+                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            }
+
+            val shareIntent = Intent.createChooser(intent, "Compartir PDF de códigos de barras")
+            shareIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            context.startActivity(shareIntent)
+        } catch (e: Exception) {
+            _uiMessage.value = "Error al compartir PDF: ${e.message}"
+        }
+    }
+
+    private fun showPDFOptions(context: Context, pdfUri: Uri) {
+        viewModelScope.launch {
+            try {
+                val intentPreview = Intent(Intent.ACTION_VIEW).apply {
+                    setDataAndType(pdfUri, "application/pdf")
+                    flags = Intent.FLAG_GRANT_READ_URI_PERMISSION
+                }
+
+                val intentShare = Intent(Intent.ACTION_SEND).apply {
+                    type = "application/pdf"
+                    putExtra(Intent.EXTRA_STREAM, pdfUri)
+                    flags = Intent.FLAG_GRANT_READ_URI_PERMISSION
+                }
+
+                val chooserIntent = Intent.createChooser(intentShare, "Compartir PDF").apply {
+                    putExtra(Intent.EXTRA_INITIAL_INTENTS, arrayOf(intentPreview))
+                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                }
+
+                context.startActivity(chooserIntent)
+            } catch (e: Exception) {
+                _uiMessage.value = "Error al abrir opciones de PDF: ${e.message}"
+            }
+        }
+    }
+
+    // Función auxiliar para obtener los productos seleccionados
+    fun getSelectedProducts(): List<Producto> {
+        val selectedIds = _selectedProductIds.value
+        return _productos.value.filter { it.id in selectedIds }
+    }
 }
