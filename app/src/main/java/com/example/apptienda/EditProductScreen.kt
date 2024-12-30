@@ -468,22 +468,28 @@ fun EditProductScreen(
                                     return@launch
                                 }
 
-                                viewModel.actualizarProducto(
-                                    Producto(
-                                        id = productId,
-                                        nombre = nombre,
-                                        descripcion = descripcion,
-                                        precio = precioDouble,
-                                        imageUrl = producto?.imageUrl ?: "",
-                                        categorias = selectedCategorias.toList()
-                                    ),
-                                    imageUri,
-                                    context
-                                ).onSuccess {
-                                    onNavigateBack()
-                                }.onFailure { error ->
-                                    errorMessage = error.message ?: "Error al actualizar el producto"
-                                    showErrorDialog = true
+                                // Crear el producto actualizado manteniendo el idNumerico original
+                                val productoActualizado = producto?.copy(
+                                    id = productId,
+                                    idNumerico = producto.idNumerico, // Mantener el ID numérico original
+                                    nombre = nombre,
+                                    descripcion = descripcion,
+                                    precio = precioDouble,
+                                    imageUrl = producto.imageUrl,
+                                    categorias = selectedCategorias.toList()
+                                )
+
+                                if (productoActualizado != null) {
+                                    viewModel.actualizarProducto(
+                                        productoActualizado,
+                                        imageUri,
+                                        context
+                                    ).onSuccess {
+                                        onNavigateBack()
+                                    }.onFailure { error ->
+                                        errorMessage = error.message ?: "Error al actualizar el producto"
+                                        showErrorDialog = true
+                                    }
                                 }
                             } finally {
                                 isLoading = false
@@ -491,10 +497,7 @@ fun EditProductScreen(
                         }
                     },
                     modifier = Modifier.fillMaxWidth(),
-                    enabled = !isLoading,
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = MaterialTheme.colorScheme.primary
-                    )
+                    enabled = !isLoading
                 ) {
                     if (isLoading) {
                         CircularProgressIndicator(
@@ -502,8 +505,6 @@ fun EditProductScreen(
                             color = MaterialTheme.colorScheme.onPrimary
                         )
                     } else {
-                        Icon(Icons.Default.Done, contentDescription = null)
-                        Spacer(modifier = Modifier.width(8.dp))
                         Text("Guardar cambios")
                     }
                 }

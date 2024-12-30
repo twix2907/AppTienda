@@ -7,6 +7,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.Query
+import com.google.firebase.firestore.SetOptions
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -87,14 +88,20 @@ class ProductoViewModel(
                 producto.imageUrl
             }
 
+            // Asegurarnos de mantener todos los campos, especialmente el idNumerico
             val productoActualizado = producto.copy(
                 imageUrl = imageUrl,
-                idNumerico = producto.idNumerico // Mantener el ID numérico existente
+                id = producto.id,
+                idNumerico = producto.idNumerico,
+                nombre = producto.nombre,
+                precio = producto.precio,
+                descripcion = producto.descripcion,
+                categorias = producto.categorias
             )
 
             db.collection("productos")
                 .document(producto.id)
-                .set(productoActualizado)
+                .set(productoActualizado, SetOptions.merge()) // Usar merge para mantener campos existentes
                 .await()
 
             Result.success(Unit)
