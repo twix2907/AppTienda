@@ -1,5 +1,6 @@
 import android.Manifest
 import android.content.pm.PackageManager
+import android.util.Size
 import android.view.ViewGroup
 import androidx.annotation.OptIn
 import androidx.camera.core.*
@@ -76,14 +77,14 @@ fun BarcodeScannerScreen(
                     val provider = cameraProvider.get()
 
                     val preview = Preview.Builder()
-                        .setTargetAspectRatio(AspectRatio.RATIO_4_3)  // Cambiamos a 4:3 que es el típico de fotos
+                        .setTargetResolution(Size(1080, 1080)) // Cambiamos a 4:3 que es el típico de fotos
                         .build()
                         .also {
                             it.setSurfaceProvider(previewView.surfaceProvider)
                         }
 
                     val imageAnalysis = ImageAnalysis.Builder()
-                        .setTargetAspectRatio(AspectRatio.RATIO_16_9)
+                        .setTargetResolution(Size(1080, 1080))
                         .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
                         .build()
                         .apply {
@@ -161,18 +162,7 @@ fun BarcodeScannerScreen(
                 }, ContextCompat.getMainExecutor(context))
             }
 
-            // Marco de escaneo
-            Canvas(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(32.dp)
-            ) {
-                drawRect(
-                    color = Color.White,
-                    style = Stroke(width = 4f),
-                    size = size
-                )
-            }
+
         }
 
         // Botones en la parte superior
