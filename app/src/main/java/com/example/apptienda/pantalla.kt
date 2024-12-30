@@ -1,5 +1,27 @@
 package com.example.apptienda
 
+import BarcodeScannerScreen
+import android.Manifest
+import android.content.pm.PackageManager
+import android.view.ViewGroup
+import androidx.camera.core.*
+import androidx.camera.lifecycle.ProcessCameraProvider
+import androidx.camera.view.PreviewView
+import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.layout.*
+import androidx.compose.runtime.*
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalLifecycleOwner
+import androidx.compose.ui.viewinterop.AndroidView
+import androidx.core.content.ContextCompat
+import com.google.mlkit.vision.barcode.BarcodeScanning
+import com.google.mlkit.vision.common.InputImage
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.unit.dp
+
 import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.spring
@@ -80,6 +102,7 @@ fun ProductListScreen(
     val categorias by viewModel.categorias.collectAsState()
 
 
+    var isBarcodeScannerVisible by remember { mutableStateOf(false) }
     // Filtrar y ordenar productos
     val filteredAndSortedProducts = productos
         .filter { producto ->
@@ -259,9 +282,17 @@ fun ProductListScreen(
                 placeholder = { Text("Buscar productos por nombre o id...") },
                 leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
                 trailingIcon = {
-                    if (searchQuery.isNotEmpty()) {
-                        IconButton(onClick = { searchQuery = "" }) {
-                            Icon(Icons.Default.Clear, contentDescription = "Limpiar")
+                    Row {
+                        if (searchQuery.isNotEmpty()) {
+                            IconButton(onClick = { searchQuery = "" }) {
+                                Icon(Icons.Default.Clear, contentDescription = "Limpiar")
+                            }
+                        }
+                        IconButton(onClick = { isBarcodeScannerVisible = true }) {
+                            Icon(
+                                imageVector = Icons.Default.PlayArrow,
+                                contentDescription = "Escanear código de barras"
+                            )
                         }
                     }
                 }
@@ -335,7 +366,27 @@ fun ProductListScreen(
             }
         }
     }
+    if (isBarcodeScannerVisible) {
+        Dialog(
+            onDismissRequest = { isBarcodeScannerVisible = false },
+            properties = DialogProperties(
+                dismissOnBackPress = true,
+                dismissOnClickOutside = false,
+                usePlatformDefaultWidth = false
+            )
+        ) {
+            BarcodeScannerScreen(
+                onBarcodeDetected = { code ->
+                    searchQuery = code
+                    isBarcodeScannerVisible = false
+                },
+                onClose = { isBarcodeScannerVisible = false }
+            )
+        }
+    }
 }
+
+
 @Composable
 fun DetailedProductList(
     productos: List<Producto>,

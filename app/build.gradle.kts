@@ -58,6 +58,20 @@ dependencies {
 
     val nav_version = "2.8.4"
 
+
+    // ML Kit para escaneo de códigos de barras
+    implementation ("com.google.mlkit:barcode-scanning:17.1.0")
+
+    // CameraX
+
+    implementation ("androidx.camera:camera-core:1.2.3")
+    implementation ("androidx.camera:camera-camera2:1.2.3")
+    implementation ("androidx.camera:camera-lifecycle:1.2.3")
+    implementation ("androidx.camera:camera-view:1.2.3")
+
+    // Guava para ListenableFuture
+    implementation ("com.google.guava:guava:31.1-android")
+
     // Jetpack Compose integration
     implementation("androidx.navigation:navigation-compose:$nav_version")
 
