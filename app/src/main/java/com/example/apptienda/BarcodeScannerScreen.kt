@@ -26,6 +26,9 @@ import androidx.core.content.ContextCompat
 import com.google.mlkit.vision.barcode.BarcodeScanning
 import com.google.mlkit.vision.common.InputImage
 import android.view.MotionEvent
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.annotation.Keep
 import androidx.camera.core.AspectRatio
 import androidx.camera.core.FocusMeteringAction
 import java.util.concurrent.TimeUnit
@@ -34,7 +37,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.material.icons.filled.AddCircle
 import androidx.compose.material.icons.filled.Build
-
+@Keep
 @OptIn(ExperimentalGetImage::class)
 @Composable
 fun BarcodeScannerScreen(
@@ -47,11 +50,29 @@ fun BarcodeScannerScreen(
     var isTorchOn by remember { mutableStateOf(true) }
     var camera by remember { mutableStateOf<Camera?>(null) }
 
-    val hasCameraPermission = remember {
-        ContextCompat.checkSelfPermission(
-            context,
-            Manifest.permission.CAMERA
-        ) == PackageManager.PERMISSION_GRANTED
+
+    // Estado para los permisos
+    var hasCameraPermission by remember {
+        mutableStateOf(
+            ContextCompat.checkSelfPermission(
+                context,
+                Manifest.permission.CAMERA
+            ) == PackageManager.PERMISSION_GRANTED
+        )
+    }
+
+    // Launcher para solicitar permisos
+    val permissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission()
+    ) { isGranted ->
+        hasCameraPermission = isGranted
+    }
+
+    // Solicitar permiso al iniciar
+    LaunchedEffect(Unit) {
+        if (!hasCameraPermission) {
+            permissionLauncher.launch(Manifest.permission.CAMERA)
+        }
     }
 
     DisposableEffect(lifecycleOwner) {
