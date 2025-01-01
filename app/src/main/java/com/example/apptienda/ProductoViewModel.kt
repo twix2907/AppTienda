@@ -111,7 +111,8 @@ class ProductoViewModel(
                 nombre = producto.nombre,
                 precio = producto.precio,
                 descripcion = producto.descripcion,
-                categorias = producto.categorias
+                categorias = producto.categorias,
+                idOrdenNumerico = producto.idOrdenNumerico  // Mantener el mismo idOrdenNumerico
             )
 
             db.collection("productos")
@@ -129,6 +130,7 @@ class ProductoViewModel(
         viewModelScope.launch {
             try {
                 db.collection("productos")
+                    .orderBy("idOrdenNumerico", Query.Direction.DESCENDING)
                     .addSnapshotListener { snapshot, e ->
                         if (e != null) return@addSnapshotListener
 
@@ -156,14 +158,18 @@ class ProductoViewModel(
             val idNumerico = withContext(Dispatchers.IO) {
                 obtenerSiguienteId()
             }
+            val idOrden = withContext(Dispatchers.IO) {
+                obtenerSiguienteOrden()
+            }
 
             val producto = Producto(
-                idNumerico = idNumerico,
+                idNumerico = idNumerico, // Ahora idNumerico es un String
                 nombre = nombre,
                 precio = precio,
                 descripcion = descripcion,
                 imageUrl = "",
-                categorias = categorias
+                categorias = categorias,
+                idOrdenNumerico = idOrden
             )
 
             val docRef = withContext(Dispatchers.IO) {
@@ -192,6 +198,26 @@ class ProductoViewModel(
         }
     }
 
+    private suspend fun obtenerSiguienteOrden(): Long {
+        return try {
+            val contadorDoc = db.collection("contadores").document("ordenProductos")
+            db.runTransaction { transaction ->
+                val snapshot = transaction.get(contadorDoc)
+                val currentId = snapshot.getLong("ultimoOrden") ?: 0L
+                val nextId = currentId + 1L
+                transaction.set(contadorDoc, hashMapOf("ultimoOrden" to nextId))
+                nextId
+            }.await()
+        } catch (e: Exception) {
+            // En caso de error, obtener el último orden del contador
+            val contadorDoc = db.collection("contadores").document("ordenProductos")
+            val snapshot = contadorDoc.get().await()
+            val lastId = snapshot.getLong("ultimoOrden") ?: 0L
+            val nextId = lastId + 1L
+            contadorDoc.set(hashMapOf("ultimoOrden" to nextId)).await()
+            nextId
+        }
+    }
     fun hasPendingUploads(): Boolean {
         return _pendingUploads.value.isNotEmpty()
     }
@@ -220,26 +246,32 @@ class ProductoViewModel(
         }
     }
 
-    private suspend fun obtenerSiguienteId(): Long {
+    private suspend fun obtenerSiguienteId(): String {
         return try {
             val contadorDoc = db.collection("contadores").document("productos")
-            db.runTransaction { transaction ->
+            val nextId = db.runTransaction { transaction ->
                 val snapshot = transaction.get(contadorDoc)
-                val currentId = snapshot.getLong("ultimoId") ?: -1
+                val currentId = snapshot.getLong("ultimoId") ?: 0
                 val nextId = currentId + 1
                 transaction.set(contadorDoc, hashMapOf("ultimoId" to nextId))
                 nextId
             }.await()
+
+            // Formatear el ID con "LBM" y el número
+            "LBM$nextId" // Esto generará IDs como LBM0001, LBM0002, etc.
         } catch (e: Exception) {
-            val maxId = db.collection("productos")
+            // En caso de error, obtener el último ID y generar el siguiente
+            val lastProduct = db.collection("productos")
                 .orderBy("idNumerico", Query.Direction.DESCENDING)
                 .limit(1)
                 .get()
                 .await()
                 .documents
                 .firstOrNull()
-                ?.getLong("idNumerico") ?: -1
-            maxId + 1
+                ?.getString("idNumerico")
+
+            val lastNumber = lastProduct?.replace("LBM", "")?.toIntOrNull() ?: 0
+            "LBM${lastNumber + 1}"
         }
     }
 

@@ -197,7 +197,48 @@ fun ProductListScreen(
                                     )
                                 }
                             )
-                            // Agregar resto de opciones de ordenamiento aquí...
+                            Divider()
+                            DropdownMenuItem(
+                                text = { Text("ID (menor a mayor)") },
+                                onClick = {
+                                    currentSortType = SortType.ID_ASC
+                                    showSortMenu = false
+                                },
+                                leadingIcon = {
+                                    Icon(Icons.Default.Menu, contentDescription = null)
+                                }
+                            )
+                            DropdownMenuItem(
+                                text = { Text("ID (mayor a menor)") },
+                                onClick = {
+                                    currentSortType = SortType.ID_DESC
+                                    showSortMenu = false
+                                },
+                                leadingIcon = {
+                                    Icon(Icons.Default.Menu, contentDescription = null)
+                                }
+                            )
+                            Divider()
+                            DropdownMenuItem(
+                                text = { Text("Precio (menor a mayor)") },
+                                onClick = {
+                                    currentSortType = SortType.PRICE_LOW_TO_HIGH
+                                    showSortMenu = false
+                                },
+                                leadingIcon = {
+                                    Icon(Icons.Default.Menu, contentDescription = null)
+                                }
+                            )
+                            DropdownMenuItem(
+                                text = { Text("Precio (mayor a menor)") },
+                                onClick = {
+                                    currentSortType = SortType.PRICE_HIGH_TO_LOW
+                                    showSortMenu = false
+                                },
+                                leadingIcon = {
+                                    Icon(Icons.Default.Menu, contentDescription = null)
+                                }
+                            )
                         }
                     },
                     colors = TopAppBarDefaults.topAppBarColors(
@@ -307,8 +348,8 @@ fun ProductListScreen(
                     when (currentSortType) {
                         SortType.ALPHABETICAL_ASC -> compareBy { it.nombre.lowercase() }
                         SortType.ALPHABETICAL_DESC -> compareByDescending { it.nombre.lowercase() }
-                        SortType.ID_ASC -> compareBy { it.idNumerico }
-                        SortType.ID_DESC -> compareByDescending { it.idNumerico }
+                        SortType.ID_ASC -> compareBy { it.idOrdenNumerico }
+                        SortType.ID_DESC -> compareByDescending { it.idOrdenNumerico }
                         SortType.PRICE_LOW_TO_HIGH -> compareBy { it.precio }
                         SortType.PRICE_HIGH_TO_LOW -> compareByDescending { it.precio }
                     }
@@ -432,15 +473,7 @@ fun ProductCard(
             )
     ) {
         Box(modifier = Modifier.fillMaxWidth()) {
-            if (isSelectionMode) {
-                Checkbox(
-                    checked = isSelected,
-                    onCheckedChange = { viewModel.toggleProductSelection(producto) },
-                    modifier = Modifier
-                        .align(Alignment.TopStart)
-                        .padding(8.dp)
-                )
-            }
+
 
             // Contenido principal del ProductCard
             Row(
@@ -449,6 +482,13 @@ fun ProductCard(
                     .padding(16.dp),
                 horizontalArrangement = Arrangement.spacedBy(16.dp)
             ) {
+                if (isSelectionMode) {
+                    Checkbox(
+                        checked = isSelected,
+                        onCheckedChange = { viewModel.toggleProductSelection(producto) },
+                        modifier = Modifier.padding(end = 8.dp)
+                    )
+                }
                 Column(
                     modifier = Modifier.weight(1f),
                     verticalArrangement = Arrangement.spacedBy(8.dp)
@@ -458,7 +498,11 @@ fun ProductCard(
                         style = MaterialTheme.typography.titleLarge,
                         fontWeight = FontWeight.Bold,
                         maxLines = if (isExpanded) Int.MAX_VALUE else 1,
-                        overflow = TextOverflow.Ellipsis
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.padding(
+                            start = if (isSelectionMode) 0.dp else 8.dp
+                        )
+
                     )
 
                     Text(
