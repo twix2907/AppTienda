@@ -64,6 +64,7 @@ dependencies {
     implementation("com.google.zxing:core:3.4.1")
     // Para crear PDFs
     implementation("com.itextpdf:itext7-core:7.2.5")
+    implementation("org.slf4j:slf4j-simple:1.7.36")
     // ML Kit para escaneo de códigos de barras
     implementation ("com.google.mlkit:barcode-scanning:17.1.0")
 
