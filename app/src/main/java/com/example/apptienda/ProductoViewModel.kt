@@ -123,25 +123,31 @@ class ProductoViewModel(
 
     suspend fun actualizarProducto(
         producto: Producto,
-        newImageUri: Uri?,
+        newImageUris: List<Uri>?, // Cambiado a lista de URIs
         context: Context
     ): Result<Unit> {
         return try {
-            val imageUrl = if (newImageUri != null) {
-                cloudinaryRepository.uploadImage(newImageUri, context)
+            val imageUrls = if (newImageUris != null) {
+                newImageUris.mapNotNull { uri ->
+                    try {
+                        cloudinaryRepository.uploadImage(uri, context)
+                    } catch (e: Exception) {
+                        null
+                    }
+                }
             } else {
-                producto.imageUrl
+                producto.imageUrls
             }
 
             val productoActualizado = producto.copy(
-                imageUrl = imageUrl,
+                imageUrls = imageUrls,
                 id = producto.id,
                 idNumerico = producto.idNumerico,
                 nombre = producto.nombre,
                 precio = producto.precio,
                 descripcion = producto.descripcion,
                 categorias = producto.categorias,
-                idOrdenNumerico = producto.idOrdenNumerico  // Mantener el mismo idOrdenNumerico
+                idOrdenNumerico = producto.idOrdenNumerico
             )
 
             db.collection("productos")
@@ -180,23 +186,22 @@ class ProductoViewModel(
         precio: Double,
         descripcion: String,
         categorias: List<String>,
-        imageUri: Uri?,
+        imageUris: List<Uri>, // Cambiado a lista de URIs
         context: Context,
-        camposAdicionales: Map<String, String>, // Campos dinámicos
+        camposAdicionales: Map<String, String>,
         idNumerico: String
     ): Result<String> {
         return try {
-
             val idOrden = withContext(Dispatchers.IO) {
                 obtenerSiguienteOrden()
             }
 
             val producto = Producto(
-                idNumerico = idNumerico, // Ahora idNumerico es un String
+                idNumerico = idNumerico,
                 nombre = nombre,
                 precio = precio,
                 descripcion = descripcion,
-                imageUrl = "",
+                imageUrls = emptyList(), // Inicialmente vacío
                 categorias = categorias,
                 idOrdenNumerico = idOrden,
                 camposAdicionales = camposAdicionales
@@ -208,17 +213,25 @@ class ProductoViewModel(
                     .await()
             }
 
-            imageUri?.let { uri ->
-                viewModelScope.launch(Dispatchers.IO) {
-                    try {
-                        val imageUrl = cloudinaryRepository.uploadImage(uri, context)
+            // Subir múltiples imágenes
+            viewModelScope.launch(Dispatchers.IO) {
+                try {
+                    val imageUrls = imageUris.mapNotNull { uri ->
+                        try {
+                            cloudinaryRepository.uploadImage(uri, context)
+                        } catch (e: Exception) {
+                            null
+                        }
+                    }
+
+                    if (imageUrls.isNotEmpty()) {
                         db.collection("productos")
                             .document(docRef.id)
-                            .update("imageUrl", imageUrl)
+                            .update("imageUrls", imageUrls)
                             .await()
-                    } catch (e: Exception) {
-                        e.printStackTrace()
                     }
+                } catch (e: Exception) {
+                    e.printStackTrace()
                 }
             }
 

@@ -48,6 +48,8 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
 
 // Enum para los tipos de vista
 enum class ViewType {
@@ -656,24 +658,22 @@ fun ProductCard(
                             .size(160.dp)
                             .clip(MaterialTheme.shapes.medium)
                     ) {
-                        AsyncImage(
-                            model = ImageRequest.Builder(LocalContext.current)
-                                .data(if (producto.imageUrl.isNullOrEmpty()) {
-                                    R.drawable.placeholder
-                                } else {
-                                    producto.imageUrl.replace("http://", "https://")
-                                })
-                                .crossfade(true)
-                                .build(),
-                            contentDescription = producto.nombre,
+                        Card(
                             modifier = Modifier
-                                .fillMaxSize()
-                                .combinedClickable(
-                                    onClick = { },
-                                    onLongClick = { showImagePreview = true }
-                                ),
-                            contentScale = ContentScale.Crop
-                        )
+                                .size(160.dp)
+                                .clip(MaterialTheme.shapes.medium)
+                        ) {
+                            ImageCarousel(
+                                imageUrls = producto.imageUrls,
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .combinedClickable(
+                                        onClick = { },
+                                        onLongClick = { showImagePreview = true }
+                                    ),
+                                contentDescription = producto.nombre
+                            )
+                        }
                     }
 
                     Box(
@@ -780,7 +780,7 @@ fun ProductCard(
     if (showImagePreview) {
         dialogoVistaPrevia(
             ondismiss = { showImagePreview = false },
-            imageUrl = producto.imageUrl.replace("http://", "https://")
+            imageUrls = producto.imageUrls
         )
     }
 }
@@ -889,16 +889,8 @@ fun GridProductCard(
         Box {
             Column {
                 Box {
-                    AsyncImage(
-                        model = ImageRequest.Builder(LocalContext.current)
-                            .data(if (producto.imageUrl.isNullOrEmpty()) {
-                                R.drawable.placeholder
-                            } else {
-                                producto.imageUrl.replace("http://", "https://")
-                            })
-                            .crossfade(true)
-                            .build(),
-                        contentDescription = producto.nombre,
+                    ImageCarousel(
+                        imageUrls = producto.imageUrls,
                         modifier = Modifier
                             .fillMaxWidth()
                             .height(160.dp)
@@ -906,7 +898,7 @@ fun GridProductCard(
                                 onClick = { },
                                 onLongClick = { showImagePreview = true }
                             ),
-                        contentScale = ContentScale.Crop
+                        contentDescription = producto.nombre
                     )
 
                     // Checkbox en modo selección
@@ -1104,7 +1096,7 @@ fun GridProductCard(
         if (showImagePreview) {
             dialogoVistaPrevia(
                 ondismiss = { showImagePreview = false },
-                imageUrl = producto.imageUrl.replace("http://", "https://")
+                imageUrls = producto.imageUrls
             )
         }
     }
@@ -1181,23 +1173,15 @@ fun CompactProductCard(
                         .size(84.dp)
                         .clip(MaterialTheme.shapes.small)
                 ) {
-                    AsyncImage(
-                        model = ImageRequest.Builder(LocalContext.current)
-                            .data(if (producto.imageUrl.isNullOrEmpty()) {
-                                R.drawable.placeholder
-                            } else {
-                                producto.imageUrl.replace("http://", "https://")
-                            })
-                            .crossfade(true)
-                            .build(),
-                        contentDescription = producto.nombre,
+                    ImageCarousel(
+                        imageUrls = producto.imageUrls,
                         modifier = Modifier
                             .fillMaxSize()
                             .combinedClickable(
                                 onClick = { },
                                 onLongClick = { showImagePreview = true }
                             ),
-                        contentScale = ContentScale.Crop
+                        contentDescription = producto.nombre
                     )
                 }
 
@@ -1384,7 +1368,7 @@ fun CompactProductCard(
     if (showImagePreview) {
         dialogoVistaPrevia(
             ondismiss = { showImagePreview = false },
-            imageUrl = producto.imageUrl.replace("http://", "https://")
+            imageUrls = producto.imageUrls
         )
     }
 }
@@ -1635,7 +1619,7 @@ fun SimpleProductCard(
 @Composable
 fun dialogoVistaPrevia(
     ondismiss: () -> Unit,
-    imageUrl: String,
+    imageUrls: List<String>,
 ) {
     Dialog(
         onDismissRequest = ondismiss,
@@ -1654,10 +1638,41 @@ fun dialogoVistaPrevia(
                     shape = RoundedCornerShape(8.dp)
                 )
         ) {
-            ZoomableImage(
-                imageUrl = imageUrl,
-                contentDescription = ""
-            )
+            val pagerState = rememberPagerState(pageCount = { imageUrls.size })
+
+            HorizontalPager(
+                state = pagerState,
+                modifier = Modifier.fillMaxSize()
+            ) { page ->
+                ZoomableImage(
+                    imageUrl = imageUrls[page],
+                    contentDescription = ""
+                )
+            }
+
+            // Indicadores
+            if (imageUrls.size > 1) {
+                Row(
+                    modifier = Modifier
+                        .align(Alignment.BottomCenter)
+                        .padding(bottom = 16.dp),
+                    horizontalArrangement = Arrangement.Center
+                ) {
+                    repeat(imageUrls.size) { iteration ->
+                        val color = if (pagerState.currentPage == iteration)
+                            MaterialTheme.colorScheme.primary
+                        else
+                            MaterialTheme.colorScheme.primary.copy(alpha = 0.5f)
+                        Box(
+                            modifier = Modifier
+                                .padding(2.dp)
+                                .clip(CircleShape)
+                                .background(color)
+                                .size(8.dp)
+                        )
+                    }
+                }
+            }
 
             IconButton(
                 onClick = ondismiss,
@@ -1670,6 +1685,56 @@ fun dialogoVistaPrevia(
                     contentDescription = "Cerrar",
                     tint = MaterialTheme.colorScheme.onSurface
                 )
+            }
+        }
+    }
+}
+@Composable
+fun ImageCarousel(
+    imageUrls: List<String>,
+    modifier: Modifier = Modifier,
+    contentDescription: String? = null
+) {
+    val pagerState = rememberPagerState(pageCount = { imageUrls.size })
+    val scope = rememberCoroutineScope()
+
+    Box(modifier = modifier) {
+        HorizontalPager(
+            state = pagerState,
+            modifier = Modifier.fillMaxSize()
+        ) { page ->
+            AsyncImage(
+                model = ImageRequest.Builder(LocalContext.current)
+                    .data(imageUrls[page].replace("http://", "https://"))
+                    .crossfade(true)
+                    .build(),
+                contentDescription = contentDescription,
+                modifier = Modifier.fillMaxSize(),
+                contentScale = ContentScale.Crop
+            )
+        }
+
+        // Indicadores (dots)
+        if (imageUrls.size > 1) {
+            Row(
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .padding(bottom = 8.dp),
+                horizontalArrangement = Arrangement.Center
+            ) {
+                repeat(imageUrls.size) { iteration ->
+                    val color = if (pagerState.currentPage == iteration)
+                        MaterialTheme.colorScheme.primary
+                    else
+                        MaterialTheme.colorScheme.primary.copy(alpha = 0.5f)
+                    Box(
+                        modifier = Modifier
+                            .padding(2.dp)
+                            .clip(CircleShape)
+                            .background(color)
+                            .size(8.dp)
+                    )
+                }
             }
         }
     }

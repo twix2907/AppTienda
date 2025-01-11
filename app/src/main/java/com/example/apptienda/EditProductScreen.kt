@@ -36,6 +36,9 @@ import coil3.request.crossfade
 import kotlinx.coroutines.launch
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.window.Dialog
@@ -54,7 +57,7 @@ fun EditProductScreen(
     var nombre by remember { mutableStateOf(producto?.nombre ?: "") }
     var descripcion by remember { mutableStateOf(producto?.descripcion ?: "") }
     var precio by remember { mutableStateOf(producto?.precio?.toString() ?: "") }
-    var imageUri by remember { mutableStateOf<Uri?>(null) }
+    var imageUris by remember { mutableStateOf<List<Uri>>(emptyList()) }
     var showImageDialog by remember { mutableStateOf(false) }
     var isLoading by remember { mutableStateOf(false) }
     var showPreview by remember { mutableStateOf(false) }
@@ -102,16 +105,20 @@ fun EditProductScreen(
     val galleryLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.GetContent()
     ) { uri: Uri? ->
-        imageUri = uri
-        showPreview = true
+        uri?.let {
+            imageUris = imageUris + it
+            showPreview = true
+        }
     }
 
     val cameraLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.TakePicture()
     ) { success ->
         if (success) {
-            imageUri = tempImageUri
-            showPreview = true
+            tempImageUri?.let { uri ->
+                imageUris = imageUris + uri
+                showPreview = true
+            }
         } else {
             tempImageUri = null
             showPreview = false
@@ -376,53 +383,121 @@ fun EditProductScreen(
                         )
 
                         // Campo de imagen
-                        OutlinedCard(
+                        LazyRow(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .height(200.dp)
-                                .clickable { showImageDialog = true }
+                                .padding(vertical = 8.dp),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
-                            Box(
-                                modifier = Modifier.fillMaxSize(),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                if (showPreview && imageUri != null) {
-                                    AsyncImage(
-                                        model = ImageRequest.Builder(context)
-                                            .data(imageUri)
-                                            .crossfade(true)
-                                            .build(),
-                                        contentDescription = "Imagen seleccionada",
+                            // Botón para agregar imagen
+                            item {
+                                OutlinedCard(
+                                    modifier = Modifier
+                                        .size(200.dp)
+                                        .clickable { showImageDialog = true }
+                                ) {
+                                    Box(
                                         modifier = Modifier.fillMaxSize(),
-                                        contentScale = ContentScale.Crop
-                                    )
-                                } else if (producto?.imageUrl != null) {
-                                    AsyncImage(
-                                        model = ImageRequest.Builder(context)
-                                            .data(producto.imageUrl.replace("http://", "https://"))
-                                            .crossfade(true)
-                                            .build(),
-                                        contentDescription = "Imagen actual",
-                                        modifier = Modifier.fillMaxSize(),
-                                        contentScale = ContentScale.Crop
-                                    )
-                                } else {
-                                    Column(
-                                        horizontalAlignment = Alignment.CenterHorizontally,
-                                        verticalArrangement = Arrangement.Center
+                                        contentAlignment = Alignment.Center
                                     ) {
-                                        Icon(
-                                            Icons.Default.ShoppingCart,
-                                            contentDescription = null,
-                                            modifier = Modifier.size(48.dp),
-                                            tint = MaterialTheme.colorScheme.primary
-                                        )
-                                        Spacer(modifier = Modifier.height(8.dp))
-                                        Text(
-                                            "Toca para agregar imagen",
-                                            style = MaterialTheme.typography.bodyMedium,
-                                            color = MaterialTheme.colorScheme.primary
-                                        )
+                                        Column(
+                                            horizontalAlignment = Alignment.CenterHorizontally,
+                                            verticalArrangement = Arrangement.Center
+                                        ) {
+                                            Icon(
+                                                Icons.Default.Info,
+                                                contentDescription = null,
+                                                modifier = Modifier.size(48.dp),
+                                                tint = MaterialTheme.colorScheme.primary
+                                            )
+                                            Spacer(modifier = Modifier.height(8.dp))
+                                            Text(
+                                                "Agregar imagen",
+                                                style = MaterialTheme.typography.bodyMedium,
+                                                color = MaterialTheme.colorScheme.primary
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+
+                            // Imágenes existentes del producto
+                            items(producto?.imageUrls ?: emptyList()) { imageUrl ->
+                                Box(
+                                    modifier = Modifier.size(200.dp)
+                                ) {
+                                    OutlinedCard(
+                                        modifier = Modifier.fillMaxSize()
+                                    ) {
+                                        Box {
+                                            AsyncImage(
+                                                model = ImageRequest.Builder(context)
+                                                    .data(imageUrl.replace("http://", "https://"))
+                                                    .crossfade(true)
+                                                    .build(),
+                                                contentDescription = null,
+                                                modifier = Modifier.fillMaxSize(),
+                                                contentScale = ContentScale.Crop
+                                            )
+                                            // Botón para eliminar imagen
+                                            IconButton(
+                                                onClick = {
+                                                    // Aquí agregar lógica para eliminar imagen
+                                                },
+                                                modifier = Modifier
+                                                    .align(Alignment.TopEnd)
+                                                    .padding(4.dp)
+                                                    .size(32.dp)
+                                                    .background(
+                                                        color = MaterialTheme.colorScheme.surface.copy(alpha = 0.8f),
+                                                        shape = CircleShape
+                                                    )
+                                            ) {
+                                                Icon(
+                                                    Icons.Default.Close,
+                                                    contentDescription = "Eliminar imagen",
+                                                    tint = MaterialTheme.colorScheme.error
+                                                )
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+
+                            // Nuevas imágenes seleccionadas
+                            items(imageUris) { uri ->
+                                Box(
+                                    modifier = Modifier.size(200.dp)
+                                ) {
+                                    OutlinedCard(
+                                        modifier = Modifier.fillMaxSize()
+                                    ) {
+                                        Box {
+                                            AsyncImage(
+                                                model = uri,
+                                                contentDescription = null,
+                                                modifier = Modifier.fillMaxSize(),
+                                                contentScale = ContentScale.Crop
+                                            )
+                                            IconButton(
+                                                onClick = { imageUris = imageUris.filter { it != uri } },
+                                                modifier = Modifier
+                                                    .align(Alignment.TopEnd)
+                                                    .padding(4.dp)
+                                                    .size(32.dp)
+                                                    .background(
+                                                        color = MaterialTheme.colorScheme.surface.copy(alpha = 0.8f),
+                                                        shape = CircleShape
+                                                    )
+                                            ) {
+                                                Icon(
+                                                    Icons.Default.Close,
+                                                    contentDescription = "Eliminar imagen",
+                                                    tint = MaterialTheme.colorScheme.error
+                                                )
+                                            }
+                                        }
                                     }
                                 }
                             }
@@ -453,11 +528,10 @@ fun EditProductScreen(
                         scope.launch(Dispatchers.IO) {
                             val productoActualizado = producto?.copy(
                                 id = productId,
-                                idNumerico = if (conId) idNumerico else "", // Usa el nuevo ID numérico según el switch
+                                idNumerico = if (conId) idNumerico else "",
                                 nombre = nombre,
                                 descripcion = descripcion,
                                 precio = precioDouble,
-                                imageUrl = producto.imageUrl,
                                 categorias = selectedCategorias.toList(),
                                 camposAdicionales = camposMap
                             )
@@ -465,7 +539,7 @@ fun EditProductScreen(
                             if (productoActualizado != null) {
                                 viewModel.actualizarProducto(
                                     productoActualizado,
-                                    imageUri,
+                                    if (imageUris.isNotEmpty()) imageUris else null,
                                     context
                                 ).onSuccess {
                                     withContext(Dispatchers.Main) {

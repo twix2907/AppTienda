@@ -89,6 +89,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.filled.Add
@@ -147,7 +148,7 @@ fun AddProductScreen(
     var nombresSimilares by remember { mutableStateOf<List<String>>(emptyList()) }
     var descripcion by remember { mutableStateOf("") }
     var precio by remember { mutableStateOf("") }
-    var imageUri by remember { mutableStateOf<Uri?>(null) }
+    var imageUris by remember { mutableStateOf<List<Uri>>(emptyList()) }
     var showImageDialog by remember { mutableStateOf(false) }
     var isLoading by remember { mutableStateOf(false) }
     var showPreview by remember { mutableStateOf(false) }
@@ -185,8 +186,10 @@ fun AddProductScreen(
     val galleryLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.GetContent()
     ) { uri: Uri? ->
-        imageUri = uri
-        showPreview = true
+        uri?.let {
+            imageUris = imageUris + it
+            showPreview = true
+        }
     }
 
     // Para tomar foto
@@ -194,9 +197,11 @@ fun AddProductScreen(
         contract = ActivityResultContracts.TakePicture()
     ) { success ->
         if (success) {
-            imageUri = tempImageUri
-            showPreview = true
-            Log.d("Camera", "Photo taken successfully: $imageUri")
+            tempImageUri?.let { uri ->
+                imageUris = imageUris + uri
+                showPreview = true
+                Log.d("Camera", "Photo taken successfully: $uri")
+            }
         } else {
             Log.e("Camera", "Failed to take photo")
             tempImageUri = null
@@ -246,7 +251,14 @@ fun AddProductScreen(
                 if (shouldNavigateBack) onNavigateBack()
             },
             title = { Text("Éxito") },
-            text = { Text("Producto guardado. La imagen se subirá en segundo plano.") },
+            text = {
+                Text(
+                    if (imageUris.isNotEmpty())
+                        "Producto guardado. Las imágenes se subirán en segundo plano."
+                    else
+                        "Producto guardado correctamente."
+                )
+            },
             confirmButton = {
                 TextButton(
                     onClick = {
@@ -278,7 +290,7 @@ fun AddProductScreen(
     if (showImageDialog) {
         AlertDialog(
             onDismissRequest = { showImageDialog = false },
-            title = { Text("Seleccionar imagen") },
+            title = { Text("Agregar imagen") },
             text = {
                 Column {
                     TextButton(
@@ -297,11 +309,9 @@ fun AddProductScreen(
                             showImageDialog = false
                             when (PackageManager.PERMISSION_GRANTED) {
                                 context.checkSelfPermission(CAMERA) -> {
-                                    showPreview = false
                                     tempImageUri = createImageFileUri(context)
                                     cameraLauncher.launch(tempImageUri!!)
                                 }
-
                                 else -> {
                                     permissionLauncher.launch(CAMERA)
                                 }
@@ -309,7 +319,7 @@ fun AddProductScreen(
                         },
                         modifier = Modifier.fillMaxWidth()
                     ) {
-                        Icon(Icons.Default.Info, contentDescription = null)
+                        Icon(Icons.Default.PlayArrow, contentDescription = null)
                         Spacer(modifier = Modifier.width(8.dp))
                         Text("Tomar foto")
                     }
@@ -698,59 +708,79 @@ fun AddProductScreen(
                         )
                     }
 
-                    OutlinedCard(
+                    LazyRow(
                         modifier = Modifier
                             .fillMaxWidth()
                             .height(200.dp)
-                            .clickable { showImageDialog = true }
+                            .padding(vertical = 8.dp),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-                        Box(
-                            modifier = Modifier.fillMaxSize(),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            if (showPreview && imageUri != null) {
-                                Box(modifier = Modifier.fillMaxSize()) {
-                                    AsyncImage(
-                                        model = ImageRequest.Builder(context)
-                                            .data(imageUri)
-                                            .crossfade(true)
-                                            .build(),
-                                        contentDescription = "Imagen seleccionada",
-                                        modifier = Modifier.fillMaxSize(),
-                                        contentScale = ContentScale.Crop,
-                                        onLoading = { isLoading = true },
-                                        onSuccess = { isLoading = false },
-                                        onError = {
-                                            isLoading = false
-                                            Log.e(
-                                                "Image",
-                                                "Error loading image: ${it.result.throwable}"
-                                            )
-                                        }
-                                    )
-                                    if (isLoading) {
-                                        CircularProgressIndicator(
-                                            modifier = Modifier.align(Alignment.Center)
+                        // Botón para agregar imagen
+                        item {
+                            OutlinedCard(
+                                modifier = Modifier
+                                    .size(200.dp)
+                                    .clickable { showImageDialog = true }
+                            ) {
+                                Box(
+                                    modifier = Modifier.fillMaxSize(),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Column(
+                                        horizontalAlignment = Alignment.CenterHorizontally,
+                                        verticalArrangement = Arrangement.Center
+                                    ) {
+                                        Icon(
+                                            Icons.Default.Info,
+                                            contentDescription = null,
+                                            modifier = Modifier.size(48.dp),
+                                            tint = MaterialTheme.colorScheme.primary
+                                        )
+                                        Spacer(modifier = Modifier.height(8.dp))
+                                        Text(
+                                            "Agregar imagen",
+                                            style = MaterialTheme.typography.bodyMedium,
+                                            color = MaterialTheme.colorScheme.primary
                                         )
                                     }
                                 }
-                            } else {
-                                Column(
-                                    horizontalAlignment = Alignment.CenterHorizontally,
-                                    verticalArrangement = Arrangement.Center
+                            }
+                        }
+
+                        // Imágenes seleccionadas
+                        items(imageUris) { uri ->
+                            Box(
+                                modifier = Modifier.size(200.dp)
+                            ) {
+                                OutlinedCard(
+                                    modifier = Modifier.fillMaxSize()
                                 ) {
-                                    Icon(
-                                        Icons.Default.Done,
-                                        contentDescription = null,
-                                        modifier = Modifier.size(48.dp),
-                                        tint = MaterialTheme.colorScheme.primary
-                                    )
-                                    Spacer(modifier = Modifier.height(8.dp))
-                                    Text(
-                                        "Toca para agregar imagen",
-                                        style = MaterialTheme.typography.bodyMedium,
-                                        color = MaterialTheme.colorScheme.primary
-                                    )
+                                    Box {
+                                        AsyncImage(
+                                            model = uri,
+                                            contentDescription = null,
+                                            modifier = Modifier.fillMaxSize(),
+                                            contentScale = ContentScale.Crop
+                                        )
+                                        // Botón para eliminar imagen
+                                        IconButton(
+                                            onClick = { imageUris = imageUris.filter { it != uri } },
+                                            modifier = Modifier
+                                                .align(Alignment.TopEnd)
+                                                .padding(4.dp)
+                                                .size(32.dp)
+                                                .background(
+                                                    color = MaterialTheme.colorScheme.surface.copy(alpha = 0.8f),
+                                                    shape = CircleShape
+                                                )
+                                        ) {
+                                            Icon(
+                                                Icons.Default.Close,
+                                                contentDescription = "Eliminar imagen",
+                                                tint = MaterialTheme.colorScheme.error
+                                            )
+                                        }
+                                    }
                                 }
                             }
                         }
@@ -768,6 +798,9 @@ fun AddProductScreen(
                     .background(MaterialTheme.colorScheme.surface)
                     .padding(16.dp)
             ) {
+
+
+
                 Button(
                     onClick = {
                         if (nombre.isBlank() || precio.isBlank()) return@Button
@@ -778,18 +811,35 @@ fun AddProductScreen(
                         isButtonPressed = true
 
                         scope.launch(Dispatchers.IO) {
-                            viewModel.agregarProducto(
-                                nombre = nombre,
-                                precio = precioDouble,
-                                descripcion = descripcion,
-                                categorias = selectedCategorias.toList(),
-                                imageUri = imageUri,
-                                context = context,
-                                camposAdicionales = camposMap,
-                                idNumerico = if (conId) idNumerico else "" // Aquí manejamos el ID según el modo
-                            )
-                            withContext(Dispatchers.Main) {
-                                onNavigateBack()
+                            try {
+                                viewModel.agregarProducto(
+                                    nombre = nombre,
+                                    precio = precioDouble,
+                                    descripcion = descripcion,
+                                    categorias = selectedCategorias.toList(),
+                                    imageUris = imageUris, // Ahora pasamos la lista de URIs
+                                    context = context,
+                                    camposAdicionales = camposMap,
+                                    idNumerico = if (conId) idNumerico else ""
+                                ).onSuccess {
+                                    withContext(Dispatchers.Main) {
+                                        showSuccessDialog = true
+                                        shouldNavigateBack = true
+                                        isButtonPressed = false
+                                    }
+                                }.onFailure { error ->
+                                    withContext(Dispatchers.Main) {
+                                        errorMessage = error.message ?: "Error al guardar el producto"
+                                        showErrorDialog = true
+                                        isButtonPressed = false
+                                    }
+                                }
+                            } catch (e: Exception) {
+                                withContext(Dispatchers.Main) {
+                                    errorMessage = e.message ?: "Error al guardar el producto"
+                                    showErrorDialog = true
+                                    isButtonPressed = false
+                                }
                             }
                         }
                     },
@@ -799,7 +849,8 @@ fun AddProductScreen(
                         .animateContentSize(),
                     colors = ButtonDefaults.buttonColors(
                         containerColor = MaterialTheme.colorScheme.primary
-                    )
+                    ),
+                    enabled = nombre.isNotBlank() && precio.isNotBlank() && !isButtonPressed
                 ) {
                     if (isButtonPressed) {
                         CircularProgressIndicator(
