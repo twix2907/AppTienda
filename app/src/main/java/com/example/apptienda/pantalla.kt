@@ -97,6 +97,7 @@ fun ProductListScreen(
             viewModel.generateBarcodes(context)
         }
     }
+    val scope = rememberCoroutineScope()
 
     // Mostrar mensaje si existe
     LaunchedEffect(uiMessage) {
@@ -155,6 +156,52 @@ fun ProductListScreen(
                     actions = {
                         IconButton(onClick = { showSortMenu = true }) {
                             Icon(Icons.Default.List, contentDescription = "Ordenar")
+                        }
+                        // Nuevo menú de 3 puntos
+                        var showOverflowMenu by remember { mutableStateOf(false) }
+                        var showGenerateDialog by remember { mutableStateOf(false) }
+
+                        IconButton(onClick = { showOverflowMenu = true }) {
+                            Icon(Icons.Default.MoreVert, contentDescription = "Más opciones")
+                        }
+                        DropdownMenu(
+                            expanded = showOverflowMenu,
+                            onDismissRequest = { showOverflowMenu = false }
+                        ) {
+                            DropdownMenuItem(
+                                text = { Text("Generar códigos de barra") },
+                                onClick = {
+                                    showOverflowMenu = false
+                                    showGenerateDialog = true
+                                },
+                                leadingIcon = {
+                                    Icon(Icons.Default.Email, contentDescription = null)
+                                }
+                            )
+                        }
+                        if (showGenerateDialog) {
+                            GenerateBarcodesDialog(
+                                onDismiss = { showGenerateDialog = false },
+                                onGenerate = { startId, count ->
+                                    scope.launch {
+                                        val barcodeGenerator = BarcodeGenerator(context)
+                                        val productos = (startId until startId + count).map { id ->
+                                            Producto(
+                                                id = "GEN_$id",
+                                                idNumerico = "LBM$id",
+                                                nombre = "Código $id",
+                                                precio = 0.0
+                                            )
+                                        }
+                                        try {
+                                            val pdfUri = barcodeGenerator.generateBarcodesAndPDF(productos)
+                                            viewModel.showPDFOptions(context, pdfUri)
+                                        } catch (e: Exception) {
+                                            viewModel.showErrorMessage("Error al generar PDF: ${e.message}")
+                                        }
+                                    }
+                                }
+                            )
                         }
                         IconButton(
                             onClick = {
@@ -419,15 +466,18 @@ fun DetailedProductList(
 private fun needsExpansion(
     descripcion: String,
     categorias: List<String>,
+    camposAdicionales: Map<String, String>,
     isExpanded: Boolean
 ): Boolean {
-    if (isExpanded) return false
+    if (isExpanded) return false  // Si ya está expandido, no es necesario "ver más"
+
     val descripcionNeedsTruncation = descripcion.count { it == '\n' } > 1 ||
             descripcion.length > 100
     val categoriasNeedExpansion = categorias.size > 2
-    return descripcionNeedsTruncation || categoriasNeedExpansion
-}
+    val tieneCamposAdicionales = camposAdicionales.isNotEmpty()
 
+    return descripcionNeedsTruncation || categoriasNeedExpansion || tieneCamposAdicionales
+}
 @OptIn(ExperimentalFoundationApi::class, ExperimentalLayoutApi::class)
 @Composable
 fun ProductCard(
@@ -568,17 +618,35 @@ fun ProductCard(
                         }
                     }
 
-                    if (needsExpansion(producto.descripcion, producto.categorias, isExpanded)) {
+                    if (needsExpansion(producto.descripcion, producto.categorias, producto.camposAdicionales, isExpanded)) {
                         Text(
                             text = "ver más...",
-                            style = MaterialTheme.typography.bodySmall.copy(
-                                fontStyle = FontStyle.Italic
-                            ),
+                            style = MaterialTheme.typography.bodySmall.copy(fontStyle = FontStyle.Italic),
                             color = MaterialTheme.colorScheme.primary.copy(alpha = 0.8f),
                             modifier = Modifier
                                 .padding(top = 4.dp)
                                 .align(Alignment.End)
                         )
+                    }
+                    // Mostrar campos adicionales solo si la tarjeta está expandida
+                    if (isExpanded && producto.camposAdicionales.isNotEmpty()) {
+                        producto.camposAdicionales.forEach { (clave, valor) ->
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                Text(
+                                    text = "$clave:",
+                                    style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold),
+                                    color = MaterialTheme.colorScheme.primary
+                                )
+                                Text(
+                                    text = valor,
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                        }
                     }
                 }
 
@@ -950,6 +1018,7 @@ fun GridProductCard(
                         fontWeight = FontWeight.Bold
                     )
 
+
                     if (isExpanded) {
                         Text(
                             text = producto.descripcion,
@@ -976,6 +1045,26 @@ fun GridProductCard(
                                         modifier = Modifier.height(24.dp)
                                     )
                                 }
+                            }
+                        }
+                    }
+                    // Mostrar campos adicionales solo si la tarjeta está expandida
+                    if (isExpanded && producto.camposAdicionales.isNotEmpty()) {
+                        producto.camposAdicionales.forEach { (clave, valor) ->
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                Text(
+                                    text = "$clave:",
+                                    style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Bold),
+                                    color = MaterialTheme.colorScheme.primary
+                                )
+                                Text(
+                                    text = valor,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
                             }
                         }
                     }
@@ -1176,6 +1265,26 @@ fun CompactProductCard(
                                     modifier = Modifier.height(24.dp)
                                 )
                             }
+                        }
+                    }
+                }
+                // Mostrar campos adicionales solo si la tarjeta está expandida
+                if (isExpanded && producto.camposAdicionales.isNotEmpty()) {
+                    producto.camposAdicionales.forEach { (clave, valor) ->
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Text(
+                                text = "$clave:",
+                                style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Bold),
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                            Text(
+                                text = valor,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
                         }
                     }
                 }
@@ -1468,6 +1577,26 @@ fun SimpleProductCard(
                                 }
                             }
                         }
+                    }
+                }
+            }
+            // Mostrar campos adicionales solo si la tarjeta está expandida
+            if (isExpanded && producto.camposAdicionales.isNotEmpty()) {
+                producto.camposAdicionales.forEach { (clave, valor) ->
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Text(
+                            text = "$clave:",
+                            style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Bold),
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                        Text(
+                            text = valor,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
                     }
                 }
             }

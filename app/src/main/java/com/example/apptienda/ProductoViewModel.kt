@@ -7,6 +7,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.State
 
 import android.net.Uri
+import android.util.Log
 import androidx.annotation.Keep
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -46,9 +47,51 @@ class ProductoViewModel(
     private val _uiMessage = MutableStateFlow<String?>(null)
     val uiMessage: StateFlow<String?> = _uiMessage
 
+    private val _campos = MutableStateFlow<List<String>>(emptyList()) // Lista de nombres de campos
+    val campos: StateFlow<List<String>> = _campos
+
     init {
         cargarCategorias()
         cargarProductos()
+        cargarCampos()
+    }
+
+    fun showErrorMessage(message: String) {
+        _uiMessage.value = message
+    }
+    // Cargar los nombres de los campos desde Firestore
+    private fun cargarCampos() {
+        viewModelScope.launch {
+            try {
+                db.collection("campos")
+                    .addSnapshotListener { snapshot, e ->
+                        if (e != null) return@addSnapshotListener
+
+                        val camposList = snapshot?.documents?.mapNotNull { doc ->
+                            doc.getString("nombre")
+                        } ?: emptyList()
+
+                        _campos.value = camposList
+                    }
+            } catch (e: Exception) {
+                Log.e("ProductoViewModel", "Error al cargar campos: ${e.message}")
+            }
+        }
+    }
+
+    // Agregar un nuevo campo a la colección "campos" si no existe
+    suspend fun agregarCampo(nombreCampo: String): Result<Unit> {
+        return try {
+            val existeCampo = campos.value.any { it.equals(nombreCampo, ignoreCase = true) }
+            if (!existeCampo) {
+                db.collection("campos")
+                    .add(hashMapOf("nombre" to nombreCampo))
+                    .await()
+            }
+            Result.success(Unit)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
     }
 
     private fun cargarCategorias() {
@@ -152,7 +195,8 @@ class ProductoViewModel(
         descripcion: String,
         categorias: List<String>,
         imageUri: Uri?,
-        context: Context
+        context: Context,
+        camposAdicionales: Map<String, String> // Campos dinámicos
     ): Result<String> {
         return try {
             val idNumerico = withContext(Dispatchers.IO) {
@@ -169,7 +213,8 @@ class ProductoViewModel(
                 descripcion = descripcion,
                 imageUrl = "",
                 categorias = categorias,
-                idOrdenNumerico = idOrden
+                idOrdenNumerico = idOrden,
+                camposAdicionales = camposAdicionales
             )
 
             val docRef = withContext(Dispatchers.IO) {
@@ -375,7 +420,7 @@ class ProductoViewModel(
         }
     }
 
-    private fun showPDFOptions(context: Context, pdfUri: Uri) {
+    fun showPDFOptions(context: Context, pdfUri: Uri) {
         viewModelScope.launch {
             try {
                 val intentPreview = Intent(Intent.ACTION_VIEW).apply {

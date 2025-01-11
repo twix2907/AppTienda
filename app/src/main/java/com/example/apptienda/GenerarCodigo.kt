@@ -24,6 +24,23 @@ import com.itextpdf.kernel.geom.Rectangle
 
 class BarcodeGenerator(private val context: Context) {
 
+    fun calculateCodesPerPage(): Int {
+        // Dimensiones de página A4 en puntos
+        val pageWidth = PageSize.A4.width - 20f // Ancho de página menos márgenes
+        val pageHeight = PageSize.A4.height - 20f // Alto de página menos márgenes
+
+        // Dimensiones del código de barras (1cm x 2cm en puntos)
+        val barcodeWidth = 56.7f // 2cm
+        val barcodeHeight = 28.35f // 1cm
+        val textHeight = 10f // Altura para el texto del ID
+
+        // Calcular número de columnas y filas que caben en la página
+        val columnsPerPage = (pageWidth / (barcodeWidth + 5)).toInt()
+        val rowsPerPage = (pageHeight / (barcodeHeight + textHeight + 5)).toInt()
+
+        return columnsPerPage * rowsPerPage
+    }
+
     fun generateBarcodesAndPDF(productos: List<Producto>): Uri {
         val fileName = "codigos_barra_${System.currentTimeMillis()}.pdf"
         val outputFile = File(context.getExternalFilesDir(null), fileName)
@@ -33,60 +50,66 @@ class BarcodeGenerator(private val context: Context) {
         val document = Document(pdfDocument, PageSize.A4)
 
         try {
-            // Configurar márgenes mínimos
             document.setMargins(10f, 10f, 10f, 10f)
 
-            // Calcular dimensiones para la cuadrícula
-            val pageWidth = PageSize.A4.width - 20f // Ancho de página menos márgenes
-            val pageHeight = PageSize.A4.height - 20f // Alto de página menos márgenes
+            val pageWidth = PageSize.A4.width - 20f
+            val pageHeight = PageSize.A4.height - 20f
 
-            // Dimensiones del código de barras (1cm x 2cm en puntos)
             val barcodeWidth = 56.7f // 2cm
             val barcodeHeight = 28.35f // 1cm
-            val textHeight = 10f // Altura para el texto del ID
+            val textHeight = 10f
 
-            // Calcular número de columnas y filas que caben en la página
-            val columnsPerPage = (pageWidth / (barcodeWidth + 5)).toInt() // 5 puntos de espacio entre columnas
-            val rowsPerPage = (pageHeight / (barcodeHeight + textHeight + 5)).toInt() // 5 puntos de espacio entre filas
+            val columnsPerPage = (pageWidth / (barcodeWidth + 5)).toInt()
+            val rowsPerPage = (pageHeight / (barcodeHeight + textHeight + 5)).toInt()
 
-            // Crear tabla
             val table = Table(columnsPerPage)
             table.setMarginTop(0f)
             table.setMarginBottom(0f)
 
             productos.forEach { producto ->
-                // Generar código de barras
                 val barcodeWriter = Code128Writer()
+
+                // Usar un ancho fijo grande para todos los códigos
                 val bitMatrix = barcodeWriter.encode(
-                    producto.idNumerico.toString(),
+                    producto.idNumerico,
                     BarcodeFormat.CODE_128,
-                    200,
-                    100
+                    300,  // Ancho fijo para todos
+                    100   // Altura fija
                 )
 
-                // Convertir a bitmap
-                val width = bitMatrix.width
-                val height = bitMatrix.height
-                val bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
-                for (x in 0 until width) {
-                    for (y in 0 until height) {
-                        bitmap.setPixel(x, y, if (bitMatrix[x, y]) 0xFF000000.toInt() else 0xFFFFFFFF.toInt())
+                // Crear un bitmap más ancho para centrar el código
+                val targetWidth = 400  // Ancho objetivo fijo para todos los códigos
+                val padding = (targetWidth - bitMatrix.width) / 2
+                val finalBitmap = Bitmap.createBitmap(targetWidth, bitMatrix.height, Bitmap.Config.ARGB_8888)
+
+                // Llenar el bitmap con fondo blanco
+                finalBitmap.eraseColor(0xFFFFFFFF.toInt())
+
+                // Copiar el código de barras al centro del bitmap
+                for (x in 0 until bitMatrix.width) {
+                    for (y in 0 until bitMatrix.height) {
+                        if (bitMatrix[x, y]) {
+                            finalBitmap.setPixel(x + padding, y, 0xFF000000.toInt())
+                        }
                     }
                 }
 
-                // Convertir bitmap a imagen para PDF
+                // Crear imagen para PDF usando el bitmap centrado
                 val stream = ByteArrayOutputStream()
-                bitmap.compress(Bitmap.CompressFormat.PNG, 100, stream)
+                finalBitmap.compress(Bitmap.CompressFormat.PNG, 100, stream)
                 val image = Image(ImageDataFactory.create(stream.toByteArray()))
+
+                // Establecer dimensiones fijas para la imagen en el PDF
                 image.setWidth(barcodeWidth)
                 image.setHeight(barcodeHeight)
+                image.setAutoScale(true)
 
-                // Crear celda con código de barras y ID
+                // Crear celda
                 val cell = Cell().apply {
                     setPadding(2f)
                     setMargin(0f)
                     add(image)
-                    add(Paragraph(producto.idNumerico.toString()).apply {
+                    add(Paragraph(producto.idNumerico).apply {
                         setFontSize(6f)
                         setTextAlignment(TextAlignment.CENTER)
                     })
@@ -95,7 +118,6 @@ class BarcodeGenerator(private val context: Context) {
             }
 
             document.add(table)
-            document.close()
             return FileProvider.getUriForFile(
                 context,
                 "${context.packageName}.provider",

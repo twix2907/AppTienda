@@ -72,6 +72,7 @@ import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.heightIn
@@ -88,6 +89,7 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.BottomSheetDefaults
@@ -109,11 +111,13 @@ import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.layout
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.zIndex
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
@@ -195,6 +199,18 @@ fun AddProductScreen(
             cameraLauncher.launch(uri)
         }
     }
+
+    // Estados para campos adicionales
+    var camposAdicionales by remember { mutableStateOf(mutableListOf<Pair<String, String>>()) }
+    var mensajeError by remember { mutableStateOf("") }
+    val listaCampos by viewModel.campos.collectAsState() // Lista de campos desde Firestore
+
+    // Variables para el nuevo campo
+    var nuevoCampoClave by remember { mutableStateOf("") }
+    var nuevoCampoValor by remember { mutableStateOf("") }
+    var expanded by remember { mutableStateOf(false) } // Controla la visibilidad del menú desplegable
+
+
 
     // Efecto para verificar nombres similares mientras se escribe
     LaunchedEffect(nombre) {
@@ -408,6 +424,121 @@ fun AddProductScreen(
                         },
                         prefix = { Text("$") }
                     )
+                    Text("Campos adicionales", style = MaterialTheme.typography.titleMedium)
+
+                    camposAdicionales.forEachIndexed { index, campo ->
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth() // Asegura que el Row ocupe todo el ancho disponible
+                                .background(Color.Blue) // Fondo azul para depuración del Row
+                                .padding(vertical = 4.dp), // Espaciado compacto entre filas
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            verticalAlignment = Alignment.CenterVertically // Alinear elementos verticalmente
+                        ) {
+                            // Campo de nombre del campo adicional
+                            var expanded by remember { mutableStateOf(false) }
+
+                            ExposedDropdownMenuBox(
+                                expanded = expanded,
+                                onExpandedChange = { expanded = it }
+                            ) {
+                                OutlinedTextField(
+                                    value = campo.first,
+                                    onValueChange = { newValue ->
+                                        camposAdicionales = camposAdicionales.toMutableList().apply {
+                                            this[index] = newValue to campo.second
+                                        }
+                                    },
+                                    label = { Text("Nombre del campo") },
+                                    modifier = Modifier
+                                        .weight(1f) // Peso menor para el nombre
+                                        .height(56.dp) // Altura estándar de Material Design
+                                        .background(Color.Red), // Fondo rojo para depuración
+                                    singleLine = true,
+                                    trailingIcon = {
+                                        ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded)
+                                    },
+                                    colors = OutlinedTextFieldDefaults.colors(
+                                        unfocusedContainerColor = MaterialTheme.colorScheme.background,
+                                        focusedContainerColor = MaterialTheme.colorScheme.background
+                                    ),
+                                    textStyle = MaterialTheme.typography.bodyMedium,
+                                    shape = RoundedCornerShape(8.dp),
+                                    maxLines = 1
+                                )
+
+                                // Menú desplegable
+                                ExposedDropdownMenu(
+                                    expanded = expanded,
+                                    onDismissRequest = { expanded = false }
+                                ) {
+                                    listaCampos.forEach { nombreCampo ->
+                                        DropdownMenuItem(
+                                            text = { Text(nombreCampo) },
+                                            onClick = {
+                                                camposAdicionales = camposAdicionales.toMutableList().apply {
+                                                    this[index] = nombreCampo to campo.second
+                                                }
+                                                expanded = false
+                                            }
+                                        )
+                                    }
+                                }
+                            }
+
+                            // Campo de valor del campo adicional
+                            OutlinedTextField(
+                                value = campo.second,
+                                onValueChange = { newValue ->
+                                    camposAdicionales = camposAdicionales.toMutableList().apply {
+                                        this[index] = campo.first to newValue
+                                    }
+                                },
+                                label = { Text("Valor del campo") },
+                                modifier = Modifier
+                                    .weight(1.5f) // Peso mayor para el valor
+                                    .height(56.dp) // Altura estándar de Material Design
+                                    .background(Color.Green), // Fondo verde para depuración
+                                singleLine = true,
+                                colors = OutlinedTextFieldDefaults.colors(
+                                    unfocusedContainerColor = MaterialTheme.colorScheme.background,
+                                    focusedContainerColor = MaterialTheme.colorScheme.background
+                                ),
+                                textStyle = MaterialTheme.typography.bodyMedium,
+                                shape = RoundedCornerShape(8.dp),
+                                maxLines = 1
+                            )
+
+                            // Botón para eliminar el campo
+                            IconButton(
+                                onClick = {
+                                    camposAdicionales = camposAdicionales.toMutableList().apply {
+                                        removeAt(index)
+                                    }
+                                },
+                                modifier = Modifier.size(32.dp) // Botón compacto
+                            ) {
+                                Icon(Icons.Default.Delete, contentDescription = "Eliminar campo")
+                            }
+                        }
+                    }
+
+                    // Botón para agregar un nuevo campo
+                    Button(
+                        onClick = {
+                            camposAdicionales = camposAdicionales.toMutableList().apply {
+                                add("" to "") // Agregar un nuevo campo vacío
+                            }
+                        },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(top = 8.dp) // Espaciado superior ajustado
+                    ) {
+                        Icon(Icons.Default.Add, contentDescription = "Agregar campo")
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text("Agregar campo")
+                    }
+
                     // Selector de categorías con menú desplegable anclado
                     CategoriesSelector(
                         categoriaSearchQuery = categoriaSearchQuery,
@@ -552,8 +683,9 @@ fun AddProductScreen(
                         if (nombre.isBlank() || precio.isBlank()) return@Button
 
                         val precioDouble = precio.toDoubleOrNull() ?: return@Button
+                        // Convertir los campos adicionales a un mapa
+                        val camposMap = camposAdicionales.associate { it.first to it.second }
 
-                        // Activar animación
                         isButtonPressed = true
 
                         scope.launch(Dispatchers.IO) {
@@ -563,9 +695,9 @@ fun AddProductScreen(
                                 descripcion = descripcion,
                                 categorias = selectedCategorias.toList(),
                                 imageUri = imageUri,
-                                context = context
+                                context = context,
+                                camposAdicionales = camposMap // Guardar campos dinámicos
                             )
-                            // Navegar inmediatamente después de guardar los datos básicos
                             withContext(Dispatchers.Main) {
                                 onNavigateBack()
                             }
