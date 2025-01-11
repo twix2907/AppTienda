@@ -1,11 +1,18 @@
 package com.example.apptienda
 
+import BarcodeScannerScreen
 import android.Manifest.permission.CAMERA
 import android.content.pm.PackageManager
 import android.net.Uri
 import android.util.Log
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.animateContentSize
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -29,6 +36,12 @@ import coil3.request.crossfade
 import kotlinx.coroutines.launch
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.ui.draw.scale
+import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
@@ -48,6 +61,24 @@ fun EditProductScreen(
     var tempImageUri by remember { mutableStateOf<Uri?>(null) }
     var showErrorDialog by remember { mutableStateOf(false) }
     var errorMessage by remember { mutableStateOf("") }
+    val view = LocalView.current
+
+    // Nuevos estados para el manejo del ID
+    var conId by remember { mutableStateOf(!producto?.idNumerico.isNullOrEmpty()) }
+    var idNumerico by remember { mutableStateOf(producto?.idNumerico ?: "") }
+    var isBarcodeScannerVisible by remember { mutableStateOf(false) }
+
+    // Estados para campos adicionales
+    var camposAdicionales by remember {
+        mutableStateOf(producto?.camposAdicionales?.map { it.key to it.value }?.toMutableList() ?: mutableListOf())
+    }
+    var mensajeError by remember { mutableStateOf("") }
+    val listaCampos by viewModel.campos.collectAsState()
+
+    // Variables para el nuevo campo
+    var nuevoCampoClave by remember { mutableStateOf("") }
+    var nuevoCampoValor by remember { mutableStateOf("") }
+    var expanded by remember { mutableStateOf(false) }
 
     // Estados para categorías
     var selectedCategorias by remember {
@@ -57,9 +88,17 @@ fun EditProductScreen(
     var showNewCategoryDialog by remember { mutableStateOf(false) }
     val categorias by viewModel.categorias.collectAsState()
 
+    var categoriaSearchQuery by remember { mutableStateOf("") }
+    var filteredCategorias by remember { mutableStateOf(categorias) }
+
+    var showSuccessDialog by remember { mutableStateOf(false) }
+    var shouldNavigateBack by remember { mutableStateOf(false) }
+    var isButtonPressed by remember { mutableStateOf(false) }
+
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
-    // Para seleccionar de galería
+
+    // [Los launchers se mantienen igual]
     val galleryLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.GetContent()
     ) { uri: Uri? ->
@@ -67,22 +106,18 @@ fun EditProductScreen(
         showPreview = true
     }
 
-    // Para tomar foto
     val cameraLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.TakePicture()
     ) { success ->
         if (success) {
             imageUri = tempImageUri
             showPreview = true
-            Log.d("Camera", "Photo taken successfully: $imageUri")
         } else {
-            Log.e("Camera", "Failed to take photo")
             tempImageUri = null
             showPreview = false
         }
     }
 
-    // Para permisos de cámara
     val permissionLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestPermission()
     ) { isGranted: Boolean ->
@@ -93,110 +128,6 @@ fun EditProductScreen(
         }
     }
 
-    // Diálogo para seleccionar imagen
-    if (showImageDialog) {
-        AlertDialog(
-            onDismissRequest = { showImageDialog = false },
-            title = { Text("Seleccionar imagen") },
-            text = {
-                Column {
-                    TextButton(
-                        onClick = {
-                            showImageDialog = false
-                            galleryLauncher.launch("image/*")
-                        },
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Icon(Icons.Default.Face, contentDescription = null)
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text("Seleccionar de galería")
-                    }
-                    TextButton(
-                        onClick = {
-                            showImageDialog = false
-                            when (PackageManager.PERMISSION_GRANTED) {
-                                context.checkSelfPermission(CAMERA) -> {
-                                    showPreview = false
-                                    tempImageUri = createImageFileUri(context)
-                                    cameraLauncher.launch(tempImageUri!!)
-                                }
-                                else -> {
-                                    permissionLauncher.launch(CAMERA)
-                                }
-                            }
-                        },
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Icon(Icons.Default.Info, contentDescription = null)
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text("Tomar foto")
-                    }
-                }
-            },
-            confirmButton = {},
-            dismissButton = {
-                TextButton(onClick = { showImageDialog = false }) {
-                    Text("Cancelar")
-                }
-            }
-        )
-    }
-
-    // Diálogo para nueva categoría
-    if (showNewCategoryDialog) {
-        var nuevaCategoria by remember { mutableStateOf("") }
-        var descripcionCategoria by remember { mutableStateOf("") }
-
-        AlertDialog(
-            onDismissRequest = { showNewCategoryDialog = false },
-            title = { Text("Nueva categoría") },
-            text = {
-                Column(
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    OutlinedTextField(
-                        value = nuevaCategoria,
-                        onValueChange = { nuevaCategoria = it },
-                        label = { Text("Nombre de la categoría") },
-                        singleLine = true
-                    )
-                    OutlinedTextField(
-                        value = descripcionCategoria,
-                        onValueChange = { descripcionCategoria = it },
-                        label = { Text("Descripción (opcional)") },
-                        singleLine = true
-                    )
-                }
-            },
-            confirmButton = {
-                TextButton(
-                    onClick = {
-                        if (nuevaCategoria.isNotBlank()) {
-                            scope.launch {
-                                viewModel.agregarCategoria(
-                                    nombre = nuevaCategoria,
-                                    descripcion = descripcionCategoria
-                                ).onSuccess { categoriaId ->
-                                    selectedCategorias = selectedCategorias + categoriaId
-                                    showNewCategoryDialog = false
-                                }.onFailure { error ->
-                                    errorMessage = error.message ?: "Error al crear la categoría"
-                                    showErrorDialog = true
-                                }
-                            }
-                        }
-                    }
-                ) {
-                    Text("Guardar")
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { showNewCategoryDialog = false }) {
-                    Text("Cancelar")
-                }
-            }
-        )
-    }
     Scaffold(
         topBar = {
             TopAppBar(
@@ -212,11 +143,11 @@ fun EditProductScreen(
                 )
             )
         }
-    ) { padding ->
+    ) { paddingValues ->
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(padding)
+                .padding(paddingValues)
         ) {
             Column(
                 modifier = Modifier
@@ -234,7 +165,59 @@ fun EditProductScreen(
                             .padding(16.dp),
                         verticalArrangement = Arrangement.spacedBy(16.dp)
                     ) {
-                        // Campo de nombre
+                        // Switch para alternar entre con/sin ID
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = if (conId) "Con ID" else "Sin ID",
+                                style = MaterialTheme.typography.bodyLarge
+                            )
+                            Switch(
+                                checked = conId,
+                                onCheckedChange = {
+                                    conId = it
+                                    if (!it) idNumerico = ""
+                                }
+                            )
+                        }
+
+                        // Campo de ID que solo se muestra si conId es true
+                        AnimatedVisibility(
+                            visible = conId,
+                            enter = fadeIn() + expandVertically(),
+                            exit = fadeOut() + shrinkVertically()
+                        ) {
+                            OutlinedTextField(
+                                value = idNumerico,
+                                onValueChange = { idNumerico = it },
+                                label = { Text("ID del producto") },
+                                modifier = Modifier.fillMaxWidth(),
+                                singleLine = true,
+                                leadingIcon = {
+                                    Icon(Icons.Default.Info, contentDescription = null)
+                                },
+                                trailingIcon = {
+                                    Row {
+                                        if (idNumerico.isNotEmpty()) {
+                                            IconButton(onClick = { idNumerico = "" }) {
+                                                Icon(Icons.Default.Clear, contentDescription = "Limpiar")
+                                            }
+                                        }
+                                        IconButton(onClick = { isBarcodeScannerVisible = true }) {
+                                            Icon(
+                                                imageVector = Icons.Default.PlayArrow,
+                                                contentDescription = "Escanear código de barras"
+                                            )
+                                        }
+                                    }
+                                }
+                            )
+                        }
+
+                        // [Resto de campos igual que en AddProductScreen]
                         OutlinedTextField(
                             value = nombre,
                             onValueChange = { nombre = it },
@@ -243,10 +226,16 @@ fun EditProductScreen(
                             singleLine = true,
                             leadingIcon = {
                                 Icon(Icons.Default.Create, contentDescription = null)
+                            },
+                            trailingIcon = {
+                                if (nombre.isNotEmpty()) {
+                                    IconButton(onClick = { nombre = "" }) {
+                                        Icon(Icons.Default.Clear, contentDescription = "Limpiar")
+                                    }
+                                }
                             }
                         )
 
-                        // Campo de descripción
                         OutlinedTextField(
                             value = descripcion,
                             onValueChange = { descripcion = it },
@@ -256,10 +245,16 @@ fun EditProductScreen(
                             maxLines = 5,
                             leadingIcon = {
                                 Icon(Icons.Default.Info, contentDescription = null)
+                            },
+                            trailingIcon = {
+                                if (descripcion.isNotEmpty()) {
+                                    IconButton(onClick = { descripcion = "" }) {
+                                        Icon(Icons.Default.Clear, contentDescription = "Limpiar")
+                                    }
+                                }
                             }
                         )
 
-                        // Campo de precio
                         OutlinedTextField(
                             value = precio,
                             onValueChange = { precio = it },
@@ -270,120 +265,116 @@ fun EditProductScreen(
                             leadingIcon = {
                                 Icon(Icons.Default.ShoppingCart, contentDescription = null)
                             },
+                            trailingIcon = {
+                                if (precio.isNotEmpty()) {
+                                    IconButton(onClick = { precio = "" }) {
+                                        Icon(Icons.Default.Clear, contentDescription = "Limpiar")
+                                    }
+                                }
+                            },
                             prefix = { Text("$") }
                         )
 
-                        // Selector de categorías
-                        Box(
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            OutlinedCard(
+                        Text("Campos adicionales", style = MaterialTheme.typography.titleMedium)
+
+                        // Campos adicionales
+                        camposAdicionales.forEachIndexed { index, campo ->
+                            Row(
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .clickable { showCategoriasMenu = true }
+                                    .padding(vertical = 4.dp),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                verticalAlignment = Alignment.CenterVertically
                             ) {
-                                Column(
-                                    modifier = Modifier.padding(16.dp)
+                                var expanded by remember { mutableStateOf(false) }
+
+                                ExposedDropdownMenuBox(
+                                    expanded = expanded,
+                                    onExpandedChange = { expanded = it }
                                 ) {
-                                    Text(
-                                        text = "Categorías",
-                                        style = MaterialTheme.typography.labelMedium
+                                    OutlinedTextField(
+                                        value = campo.first,
+                                        onValueChange = { newValue ->
+                                            camposAdicionales = camposAdicionales.toMutableList().apply {
+                                                this[index] = newValue to campo.second
+                                            }
+                                        },
+                                        label = { Text("Nombre del campo") },
+                                        modifier = Modifier
+                                            .weight(1f)
+                                            .menuAnchor(),
+                                        singleLine = true,
+                                        trailingIcon = {
+                                            ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded)
+                                        }
                                     )
 
-                                    if (selectedCategorias.isEmpty()) {
-                                        Text(
-                                            text = "Selecciona categorías",
-                                            style = MaterialTheme.typography.bodyMedium,
-                                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                                        )
-                                    } else {
-                                        FlowRow(
-                                            modifier = Modifier.fillMaxWidth(),
-                                            horizontalArrangement = Arrangement.spacedBy(8.dp)
-                                        ) {
-                                            selectedCategorias.forEach { categoriaId ->
-                                                categorias.find { it.id == categoriaId }?.let { categoria ->
-                                                    FilterChip(
-                                                        selected = true,
-                                                        onClick = {
-                                                            selectedCategorias = selectedCategorias - categoriaId
-                                                        },
-                                                        label = { Text(categoria.nombre) },
-                                                        trailingIcon = {
-                                                            Icon(
-                                                                Icons.Default.Close,
-                                                                contentDescription = "Eliminar"
-                                                            )
-                                                        }
-                                                    )
+                                    ExposedDropdownMenu(
+                                        expanded = expanded,
+                                        onDismissRequest = { expanded = false }
+                                    ) {
+                                        listaCampos.forEach { nombreCampo ->
+                                            DropdownMenuItem(
+                                                text = { Text(nombreCampo) },
+                                                onClick = {
+                                                    camposAdicionales = camposAdicionales.toMutableList().apply {
+                                                        this[index] = nombreCampo to campo.second
+                                                    }
+                                                    expanded = false
                                                 }
-                                            }
+                                            )
                                         }
                                     }
                                 }
-                            }
 
-                            DropdownMenu(
-                                expanded = showCategoriasMenu,
-                                onDismissRequest = { showCategoriasMenu = false },
-                                modifier = Modifier.fillMaxWidth(0.9f)
-                            ) {
-                                categorias.forEach { categoria ->
-                                    DropdownMenuItem(
-                                        text = {
-                                            Text(
-                                                text = categoria.nombre,
-                                                color = if (selectedCategorias.contains(categoria.id)) {
-                                                    MaterialTheme.colorScheme.primary
-                                                } else {
-                                                    MaterialTheme.colorScheme.onSurface
-                                                }
-                                            )
-                                        },
-                                        onClick = {
-                                            selectedCategorias = if (selectedCategorias.contains(categoria.id)) {
-                                                selectedCategorias - categoria.id
-                                            } else {
-                                                selectedCategorias + categoria.id
-                                            }
-                                        },
-                                        leadingIcon = {
-                                            if (selectedCategorias.contains(categoria.id)) {
-                                                Icon(
-                                                    imageVector = Icons.Default.Done,
-                                                    contentDescription = null,
-                                                    tint = MaterialTheme.colorScheme.primary
-                                                )
-                                            }
-                                        },
-                                        modifier = Modifier.background(
-                                            if (selectedCategorias.contains(categoria.id)) {
-                                                MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.1f)
-                                            } else {
-                                                MaterialTheme.colorScheme.surface
-                                            }
-                                        )
-                                    )
-                                }
-
-                                Divider(modifier = Modifier.padding(vertical = 4.dp))
-
-                                DropdownMenuItem(
-                                    text = { Text("Agregar nueva categoría") },
-                                    onClick = {
-                                        showCategoriasMenu = false
-                                        showNewCategoryDialog = true
+                                OutlinedTextField(
+                                    value = campo.second,
+                                    onValueChange = { newValue ->
+                                        camposAdicionales = camposAdicionales.toMutableList().apply {
+                                            this[index] = campo.first to newValue
+                                        }
                                     },
-                                    leadingIcon = {
-                                        Icon(
-                                            Icons.Default.Add,
-                                            contentDescription = null,
-                                            tint = MaterialTheme.colorScheme.primary
-                                        )
-                                    }
+                                    label = { Text("Valor del campo") },
+                                    modifier = Modifier.weight(1.5f),
+                                    singleLine = true
                                 )
+
+                                IconButton(
+                                    onClick = {
+                                        camposAdicionales = camposAdicionales.toMutableList().apply {
+                                            removeAt(index)
+                                        }
+                                    }
+                                ) {
+                                    Icon(Icons.Default.Delete, contentDescription = "Eliminar campo")
+                                }
                             }
                         }
+
+                        Button(
+                            onClick = {
+                                camposAdicionales = camposAdicionales.toMutableList().apply {
+                                    add("" to "")
+                                }
+                            },
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Icon(Icons.Default.Add, contentDescription = "Agregar campo")
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text("Agregar campo")
+                        }
+
+                        // Selector de categorías
+                        CategoriesSelector(
+                            categoriaSearchQuery = categoriaSearchQuery,
+                            onQueryChange = { categoriaSearchQuery = it },
+                            selectedCategorias = selectedCategorias,
+                            onSelectionChange = { selectedCategorias = it },
+                            categorias = categorias,
+                            onAddNewCategory = { showNewCategoryDialog = true },
+                            viewModel = viewModel
+                        )
+
                         // Campo de imagen
                         OutlinedCard(
                             modifier = Modifier
@@ -442,7 +433,7 @@ fun EditProductScreen(
                 Spacer(modifier = Modifier.height(80.dp))
             }
 
-            // Botón fijo en la parte inferior
+            // Botón de guardar
             Box(
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
@@ -452,54 +443,54 @@ fun EditProductScreen(
             ) {
                 Button(
                     onClick = {
-                        scope.launch {
-                            isLoading = true
-                            try {
-                                if (nombre.isBlank() || precio.isBlank()) {
-                                    errorMessage = "Por favor completa todos los campos requeridos"
-                                    showErrorDialog = true
-                                    return@launch
-                                }
+                        if (nombre.isBlank() || precio.isBlank()) return@Button
 
-                                val precioDouble = precio.toDoubleOrNull()
-                                if (precioDouble == null) {
-                                    errorMessage = "Por favor ingresa un precio válido"
-                                    showErrorDialog = true
-                                    return@launch
-                                }
+                        val precioDouble = precio.toDoubleOrNull() ?: return@Button
+                        val camposMap = camposAdicionales.associate { it.first to it.second }
 
-                                // Crear el producto actualizado manteniendo el idNumerico original
-                                val productoActualizado = producto?.copy(
-                                    id = productId,
-                                    idNumerico = producto.idNumerico, // Mantener el ID numérico original
-                                    nombre = nombre,
-                                    descripcion = descripcion,
-                                    precio = precioDouble,
-                                    imageUrl = producto.imageUrl,
-                                    categorias = selectedCategorias.toList()
-                                )
+                        isButtonPressed = true
 
-                                if (productoActualizado != null) {
-                                    viewModel.actualizarProducto(
-                                        productoActualizado,
-                                        imageUri,
-                                        context
-                                    ).onSuccess {
-                                        onNavigateBack()
-                                    }.onFailure { error ->
+                        scope.launch(Dispatchers.IO) {
+                            val productoActualizado = producto?.copy(
+                                id = productId,
+                                idNumerico = if (conId) idNumerico else "", // Usa el nuevo ID numérico según el switch
+                                nombre = nombre,
+                                descripcion = descripcion,
+                                precio = precioDouble,
+                                imageUrl = producto.imageUrl,
+                                categorias = selectedCategorias.toList(),
+                                camposAdicionales = camposMap
+                            )
+
+                            if (productoActualizado != null) {
+                                viewModel.actualizarProducto(
+                                    productoActualizado,
+                                    imageUri,
+                                    context
+                                ).onSuccess {
+                                    withContext(Dispatchers.Main) {
+                                        showSuccessDialog = true
+                                        shouldNavigateBack = true
+                                    }
+                                }.onFailure { error ->
+                                    withContext(Dispatchers.Main) {
                                         errorMessage = error.message ?: "Error al actualizar el producto"
                                         showErrorDialog = true
+                                        isButtonPressed = false
                                     }
                                 }
-                            } finally {
-                                isLoading = false
                             }
                         }
                     },
-                    modifier = Modifier.fillMaxWidth(),
-                    enabled = !isLoading
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .scale(if (isButtonPressed) 0.95f else 1f)
+                        .animateContentSize(),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = MaterialTheme.colorScheme.primary
+                    )
                 ) {
-                    if (isLoading) {
+                    if (isButtonPressed) {
                         CircularProgressIndicator(
                             modifier = Modifier.size(24.dp),
                             color = MaterialTheme.colorScheme.onPrimary
@@ -512,7 +503,28 @@ fun EditProductScreen(
         }
     }
 
-    // Diálogo de error
+    // Diálogos
+    if (showSuccessDialog) {
+        AlertDialog(
+            onDismissRequest = {
+                showSuccessDialog = false
+                if (shouldNavigateBack) onNavigateBack()
+            },
+            title = { Text("Éxito") },
+            text = { Text("Producto actualizado correctamente.") },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        showSuccessDialog = false
+                        if (shouldNavigateBack) onNavigateBack()
+                    }
+                ) {
+                    Text("OK")
+                }
+            }
+        )
+    }
+
     if (showErrorDialog) {
         AlertDialog(
             onDismissRequest = { showErrorDialog = false },
@@ -524,5 +536,72 @@ fun EditProductScreen(
                 }
             }
         )
+    }
+
+    if (showImageDialog) {
+        AlertDialog(
+            onDismissRequest = { showImageDialog = false },
+            title = { Text("Seleccionar imagen") },
+            text = {
+                Column {
+                    TextButton(
+                        onClick = {
+                            showImageDialog = false
+                            galleryLauncher.launch("image/*")
+                        },
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Icon(Icons.Default.Face, contentDescription = null)
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text("Seleccionar de galería")
+                    }
+                    TextButton(
+                        onClick = {
+                            showImageDialog = false
+                            when (PackageManager.PERMISSION_GRANTED) {
+                                context.checkSelfPermission(CAMERA) -> {
+                                    showPreview = false
+                                    tempImageUri = createImageFileUri(context)
+                                    cameraLauncher.launch(tempImageUri!!)
+                                }
+                                else -> {
+                                    permissionLauncher.launch(CAMERA)
+                                }
+                            }
+                        },
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Icon(Icons.Default.Info, contentDescription = null)
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text("Tomar foto")
+                    }
+                }
+            },
+            confirmButton = {},
+            dismissButton = {
+                TextButton(onClick = { showImageDialog = false }) {
+                    Text("Cancelar")
+                }
+            }
+        )
+    }
+
+    if (isBarcodeScannerVisible) {
+        Dialog(
+            onDismissRequest = { isBarcodeScannerVisible = false },
+            properties = DialogProperties(
+                dismissOnBackPress = true,
+                dismissOnClickOutside = false,
+                usePlatformDefaultWidth = false
+            )
+        ) {
+            BarcodeScannerScreen(
+                onBarcodeDetected = { code ->
+                    idNumerico = code
+                    isBarcodeScannerVisible = false
+                },
+                onClose = { isBarcodeScannerVisible = false }
+            )
+        }
     }
 }
