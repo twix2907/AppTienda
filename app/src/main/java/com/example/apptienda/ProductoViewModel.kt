@@ -79,20 +79,6 @@ class ProductoViewModel(
         }
     }
 
-    // Agregar un nuevo campo a la colección "campos" si no existe
-    suspend fun agregarCampo(nombreCampo: String): Result<Unit> {
-        return try {
-            val existeCampo = campos.value.any { it.equals(nombreCampo, ignoreCase = true) }
-            if (!existeCampo) {
-                db.collection("campos")
-                    .add(hashMapOf("nombre" to nombreCampo))
-                    .await()
-            }
-            Result.success(Unit)
-        } catch (e: Exception) {
-            Result.failure(e)
-        }
-    }
 
     private fun cargarCategorias() {
         viewModelScope.launch {
@@ -196,12 +182,11 @@ class ProductoViewModel(
         categorias: List<String>,
         imageUri: Uri?,
         context: Context,
-        camposAdicionales: Map<String, String> // Campos dinámicos
+        camposAdicionales: Map<String, String>, // Campos dinámicos
+        idNumerico: String
     ): Result<String> {
         return try {
-            val idNumerico = withContext(Dispatchers.IO) {
-                obtenerSiguienteId()
-            }
+
             val idOrden = withContext(Dispatchers.IO) {
                 obtenerSiguienteOrden()
             }
@@ -263,9 +248,7 @@ class ProductoViewModel(
             nextId
         }
     }
-    fun hasPendingUploads(): Boolean {
-        return _pendingUploads.value.isNotEmpty()
-    }
+
 
     suspend fun eliminarProducto(productoId: String): Result<Unit> {
         return try {
@@ -279,17 +262,6 @@ class ProductoViewModel(
         }
     }
 
-    suspend fun eliminarCategoria(categoriaId: String): Result<Unit> {
-        return try {
-            db.collection("categorias")
-                .document(categoriaId)
-                .delete()
-                .await()
-            Result.success(Unit)
-        } catch (e: Exception) {
-            Result.failure(e)
-        }
-    }
 
     private suspend fun obtenerSiguienteId(): String {
         return try {
@@ -403,22 +375,6 @@ class ProductoViewModel(
     }
 
 
-    private fun sharePDF(context: Context, pdfUri: Uri) {
-        try {
-            val intent = Intent().apply {
-                action = Intent.ACTION_SEND
-                type = "application/pdf"
-                putExtra(Intent.EXTRA_STREAM, pdfUri)
-                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-            }
-
-            val shareIntent = Intent.createChooser(intent, "Compartir PDF de códigos de barras")
-            shareIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-            context.startActivity(shareIntent)
-        } catch (e: Exception) {
-            _uiMessage.value = "Error al compartir PDF: ${e.message}"
-        }
-    }
 
     fun showPDFOptions(context: Context, pdfUri: Uri) {
         viewModelScope.launch {
@@ -446,9 +402,5 @@ class ProductoViewModel(
         }
     }
 
-    // Función auxiliar para obtener los productos seleccionados
-    fun getSelectedProducts(): List<Producto> {
-        val selectedIds = _selectedProductIds.value
-        return _productos.value.filter { it.id in selectedIds }
-    }
+
 }

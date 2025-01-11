@@ -1,6 +1,7 @@
 package com.example.apptienda
 
 
+import BarcodeScannerScreen
 import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Environment
@@ -65,7 +66,12 @@ import android.Manifest.permission.CAMERA
 import android.content.Context
 import android.util.Log
 import android.view.inputmethod.InputMethodManager
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateContentSize
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.combinedClickable
@@ -88,8 +94,10 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.BottomSheetDefaults
@@ -103,6 +111,7 @@ import androidx.compose.material3.ExposedDropdownMenuDefaults
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedTextFieldDefaults
+import androidx.compose.material3.Switch
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -118,6 +127,8 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import androidx.compose.ui.zIndex
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
@@ -165,6 +176,11 @@ fun AddProductScreen(
     var categoriaSearchQuery by remember { mutableStateOf("") }
     var filteredCategorias by remember { mutableStateOf(categorias) }
 
+
+    // Nuevos estados para el manejo del ID
+    var conId by remember { mutableStateOf(true) } // true = con ID, false = sin ID
+    var idNumerico by remember { mutableStateOf("") }
+
     // Para seleccionar de galería
     val galleryLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.GetContent()
@@ -210,6 +226,7 @@ fun AddProductScreen(
     var nuevoCampoValor by remember { mutableStateOf("") }
     var expanded by remember { mutableStateOf(false) } // Controla la visibilidad del menú desplegable
 
+    var isBarcodeScannerVisible by remember { mutableStateOf(false) }
 
 
     // Efecto para verificar nombres similares mientras se escribe
@@ -344,6 +361,57 @@ fun AddProductScreen(
                         .padding(16.dp),
                     verticalArrangement = Arrangement.spacedBy(16.dp)
                 ) {
+                    // Switch para alternar entre con/sin ID
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = if (conId) "Con ID" else "Sin ID",
+                            style = MaterialTheme.typography.bodyLarge
+                        )
+                        Switch(
+                            checked = conId,
+                            onCheckedChange = {
+                                conId = it
+                                if (!it) idNumerico = "" // Limpiar ID si se cambia a modo "sin ID"
+                            }
+                        )
+                    }
+
+                    // Campo de ID que solo se muestra si conId es true
+                    AnimatedVisibility(
+                        visible = conId,
+                        enter = fadeIn() + expandVertically(),
+                        exit = fadeOut() + shrinkVertically()
+                    ) {
+                        OutlinedTextField(
+                            value = idNumerico,
+                            onValueChange = { idNumerico = it },
+                            label = { Text("ID del producto") },
+                            modifier = Modifier.fillMaxWidth(),
+                            singleLine = true,
+                            leadingIcon = {
+                                Icon(Icons.Default.Info, contentDescription = null)
+                            },
+                            trailingIcon = {
+                                Row {
+                                    if (idNumerico.isNotEmpty()) {
+                                        IconButton(onClick = { idNumerico = "" }) {
+                                            Icon(Icons.Default.Clear, contentDescription = "Limpiar")
+                                        }
+                                    }
+                                    IconButton(onClick = { isBarcodeScannerVisible = true }) {
+                                        Icon(
+                                            imageVector = Icons.Default.PlayArrow,
+                                            contentDescription = "Escanear código de barras"
+                                        )
+                                    }
+                                }
+                            }
+                        )
+                    }
                     // Campo de nombre
                     Box(modifier = Modifier.fillMaxWidth()) {
                         OutlinedTextField(
@@ -354,8 +422,16 @@ fun AddProductScreen(
                             singleLine = true,
                             leadingIcon = {
                                 Icon(Icons.Default.Create, contentDescription = null)
+                            },
+                            trailingIcon = {
+                                if (nombre.isNotEmpty()) {
+                                    IconButton(onClick = { nombre = "" }) {
+                                        Icon(Icons.Default.Clear, contentDescription = "Limpiar")
+                                    }
+                                }
                             }
                         )
+
 
                         if (nombresSimilares.isNotEmpty()) {
                             Card(
@@ -408,6 +484,13 @@ fun AddProductScreen(
                         maxLines = 5,
                         leadingIcon = {
                             Icon(Icons.Default.Info, contentDescription = null)
+                        },
+                        trailingIcon = {
+                            if (descripcion.isNotEmpty()) {
+                                IconButton(onClick = { descripcion = "" }) {
+                                    Icon(Icons.Default.Clear, contentDescription = "Limpiar")
+                                }
+                            }
                         }
                     )
 
@@ -421,6 +504,13 @@ fun AddProductScreen(
                         singleLine = true,
                         leadingIcon = {
                             Icon(Icons.Default.ShoppingCart, contentDescription = null)
+                        },
+                        trailingIcon = {
+                            if (precio.isNotEmpty()) {
+                                IconButton(onClick = { precio = "" }) {
+                                    Icon(Icons.Default.Clear, contentDescription = "Limpiar")
+                                }
+                            }
                         },
                         prefix = { Text("$") }
                     )
@@ -683,7 +773,6 @@ fun AddProductScreen(
                         if (nombre.isBlank() || precio.isBlank()) return@Button
 
                         val precioDouble = precio.toDoubleOrNull() ?: return@Button
-                        // Convertir los campos adicionales a un mapa
                         val camposMap = camposAdicionales.associate { it.first to it.second }
 
                         isButtonPressed = true
@@ -696,7 +785,8 @@ fun AddProductScreen(
                                 categorias = selectedCategorias.toList(),
                                 imageUri = imageUri,
                                 context = context,
-                                camposAdicionales = camposMap // Guardar campos dinámicos
+                                camposAdicionales = camposMap,
+                                idNumerico = if (conId) idNumerico else "" // Aquí manejamos el ID según el modo
                             )
                             withContext(Dispatchers.Main) {
                                 onNavigateBack()
@@ -722,6 +812,24 @@ fun AddProductScreen(
                 }
             }
     }
+        if (isBarcodeScannerVisible) {
+            Dialog(
+                onDismissRequest = { isBarcodeScannerVisible = false },
+                properties = DialogProperties(
+                    dismissOnBackPress = true,
+                    dismissOnClickOutside = false,
+                    usePlatformDefaultWidth = false
+                )
+            ) {
+                BarcodeScannerScreen(
+                    onBarcodeDetected = { code ->
+                        idNumerico = code
+                        isBarcodeScannerVisible = false
+                    },
+                    onClose = { isBarcodeScannerVisible = false }
+                )
+            }
+        }
 }
 }
 
