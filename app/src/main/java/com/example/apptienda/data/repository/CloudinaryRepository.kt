@@ -1,4 +1,4 @@
-package com.example.apptienda
+package com.example.apptienda.data.repository
 
 import android.content.Context
 import android.net.Uri
@@ -10,28 +10,20 @@ import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
 
+
 class CloudinaryRepository {
     suspend fun uploadImage(imageUri: Uri, context: Context): String {
         return suspendCancellableCoroutine { continuation ->
             try {
-                // Crear opciones de optimización
+                // Configuración de optimización de imágenes
                 val options = HashMap<String, Any>().apply {
-                    // Optimización de calidad automática con modo económico
                     put("quality_analysis", true)
                     put("quality", "auto:eco")
-
-                    // Formato automático optimizado
                     put("fetch_format", "auto")
-
-                    // Limitar dimensiones máximas
                     put("width", 1024)
                     put("height", 1024)
                     put("crop", "limit")
-
-                    // Compresión optimizada
                     put("compression", "low")
-
-                    // Eliminar metadata innecesaria
                     put("strip", true)
                 }
 
@@ -40,21 +32,21 @@ class CloudinaryRepository {
                     .options(options)
                     .callback(object : UploadCallback {
                         override fun onStart(requestId: String) {
-                            Log.d("Cloudinary", "Iniciando subida optimizada")
+                            Log.d(TAG, "Iniciando subida optimizada")
                         }
 
                         override fun onProgress(requestId: String, bytes: Long, totalBytes: Long) {
                             val progress = (bytes.toDouble() / totalBytes) * 100
-                            Log.d("Cloudinary", "Progreso: $progress%")
+                            Log.d(TAG, "Progreso: $progress%")
                         }
 
                         override fun onSuccess(requestId: String, resultData: Map<*, *>) {
                             val imageUrl = (resultData["url"] as? String)?.replace("http://", "https://")
-                            // Agregar transformaciones a la URL para optimización adicional
                             val optimizedUrl = imageUrl?.let { url ->
                                 url.replace("/upload/", "/upload/f_auto,q_auto:eco,c_limit,w_1024/")
                             }
-                            Log.d("Cloudinary", "URL optimizada: $optimizedUrl")
+                            Log.d(TAG, "URL optimizada: $optimizedUrl")
+
                             if (optimizedUrl != null) {
                                 continuation.resume(optimizedUrl)
                             } else {
@@ -63,19 +55,24 @@ class CloudinaryRepository {
                         }
 
                         override fun onError(requestId: String, error: ErrorInfo) {
-                            Log.e("Cloudinary", "Error: ${error.description}")
+                            Log.e(TAG, "Error: ${error.description}")
                             continuation.resumeWithException(Exception(error.description))
                         }
 
                         override fun onReschedule(requestId: String, error: ErrorInfo) {
-                            Log.d("Cloudinary", "Reintentando subida")
+                            Log.d(TAG, "Reintentando subida")
                         }
                     })
                     .dispatch()
+
             } catch (e: Exception) {
-                Log.e("Cloudinary", "Error en uploadImage", e)
+                Log.e(TAG, "Error en uploadImage", e)
                 continuation.resumeWithException(e)
             }
         }
+    }
+
+    companion object {
+        private const val TAG = "CloudinaryRepository"
     }
 }

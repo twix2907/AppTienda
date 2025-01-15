@@ -1,8 +1,7 @@
-package com.example.apptienda
+package com.example.apptienda.ui.screens.products.list
 
-import BarcodeScannerScreen
+import com.example.apptienda.ui.screens.scanner.BarcodeScannerScreen
 import android.Manifest
-import android.content.pm.PackageManager
 import android.os.Build
 import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.Spring
@@ -37,7 +36,6 @@ import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.draw.rotate
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.window.Dialog
@@ -50,6 +48,12 @@ import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
+import androidx.compose.ui.res.painterResource
+import com.example.apptienda.ui.components.barcode.BarcodeGenerator
+import com.example.apptienda.ui.components.barcode.GenerateBarcodesDialog
+import com.example.apptienda.ui.viewmodel.ProductoViewModel
+import com.example.apptienda.R
+import com.example.apptienda.domain.model.Producto
 
 // Enum para los tipos de vista
 enum class ViewType {
@@ -927,7 +931,7 @@ fun GridProductCard(
                             modifier = Modifier.size(32.dp)
                         ) {
                             Icon(
-                                Icons.Default.MoreVert,
+                                painterResource(R.drawable.sharp_grid_view_24),
                                 contentDescription = "Opciones",
                                 tint = MaterialTheme.colorScheme.onSurface,
                                 modifier = Modifier.size(20.dp)

@@ -1,4 +1,4 @@
-package com.example.apptienda
+package com.example.apptienda.ui.components.barcode
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -50,7 +50,9 @@ fun GenerateBarcodesDialog(
                     onValueChange = { startId = it },
                     label = { Text("Número inicial") },
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                    modifier = Modifier.fillMaxWidth()
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true,
+                    isError = startId.isNotEmpty() && startId.toIntOrNull() == null
                 )
 
                 OutlinedTextField(
@@ -58,7 +60,9 @@ fun GenerateBarcodesDialog(
                     onValueChange = { count = it },
                     label = { Text("Cantidad de códigos") },
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                    modifier = Modifier.fillMaxWidth()
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true,
+                    isError = count.isNotEmpty() && count.toIntOrNull() == null
                 )
 
                 Text(
@@ -71,11 +75,17 @@ fun GenerateBarcodesDialog(
         confirmButton = {
             TextButton(
                 onClick = {
-                    val start = startId.toIntOrNull() ?: return@TextButton
-                    val cantidad = count.toIntOrNull() ?: return@TextButton
-                    onGenerate(start, cantidad)
-                    onDismiss()
-                }
+                    val startIdInt = startId.toIntOrNull()
+                    val countInt = count.toIntOrNull()
+
+                    if (startIdInt != null && countInt != null && countInt > 0) {
+                        onGenerate(startIdInt, countInt)
+                        onDismiss()
+                    }
+                },
+                enabled = startId.toIntOrNull() != null &&
+                        count.toIntOrNull() != null &&
+                        count.toIntOrNull() ?: 0 > 0
             ) {
                 Text("Generar")
             }

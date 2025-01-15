@@ -1,4 +1,4 @@
-package com.example.apptienda
+package com.example.apptienda.domain.model
 
 import androidx.annotation.Keep
 

@@ -1,10 +1,9 @@
-package com.example.apptienda
+package com.example.apptienda.ui.screens.products.edit
 
-import BarcodeScannerScreen
+import com.example.apptienda.ui.screens.scanner.BarcodeScannerScreen
 import android.Manifest.permission.CAMERA
 import android.content.pm.PackageManager
 import android.net.Uri
-import android.util.Log
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
@@ -35,7 +34,6 @@ import coil3.request.ImageRequest
 import coil3.request.crossfade
 import kotlinx.coroutines.launch
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
-import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
@@ -43,6 +41,9 @@ import androidx.compose.ui.draw.scale
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
+import com.example.apptienda.ui.viewmodel.ProductoViewModel
+import com.example.apptienda.ui.screens.products.add.CategoriesSelector
+import com.example.apptienda.ui.screens.products.add.createImageFileUri
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 

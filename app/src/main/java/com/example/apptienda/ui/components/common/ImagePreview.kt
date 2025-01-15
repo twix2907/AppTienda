@@ -1,4 +1,4 @@
-package com.example.apptienda
+package com.example.apptienda.ui.components.common
 
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties

@@ -1,4 +1,4 @@
-package com.example.apptienda
+package com.example.apptienda.ui.components.common
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Row
