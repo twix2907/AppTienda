@@ -88,35 +88,41 @@ class BarcodeGenerator(private val context: Context) {
 
     private fun generateBarcodeImage(idNumerico: String): Bitmap {
         val barcodeWriter = Code128Writer()
+
+        // Aumentamos significativamente el ancho de la matriz para códigos LBM
+        val adjustedWidth = when {
+            idNumerico.startsWith("LBM") -> BARCODE_MATRIX_WIDTH + 300 // Aumento significativo para códigos LBM
+            else -> BARCODE_MATRIX_WIDTH
+        }
+
         val bitMatrix = barcodeWriter.encode(
             idNumerico,
             BarcodeFormat.CODE_128,
-            BARCODE_MATRIX_WIDTH,
+            adjustedWidth,
             BARCODE_MATRIX_HEIGHT
         )
 
-        val targetWidth = BARCODE_TARGET_WIDTH
-        val padding = (targetWidth - bitMatrix.width) / 2
-        return createBitmapFromMatrix(bitMatrix, targetWidth, padding)
+        return createBitmapFromMatrix(bitMatrix)
     }
 
     private fun createBitmapFromMatrix(
-        bitMatrix: com.google.zxing.common.BitMatrix,
-        targetWidth: Int,
-        padding: Int
+        bitMatrix: com.google.zxing.common.BitMatrix
     ): Bitmap {
+        val width = bitMatrix.width
+        val height = bitMatrix.height
+
         val bitmap = Bitmap.createBitmap(
-            targetWidth,
-            bitMatrix.height,
+            width,
+            height,
             Bitmap.Config.ARGB_8888
         ).apply {
             eraseColor(0xFFFFFFFF.toInt())
         }
 
-        for (x in 0 until bitMatrix.width) {
-            for (y in 0 until bitMatrix.height) {
+        for (x in 0 until width) {
+            for (y in 0 until height) {
                 if (bitMatrix[x, y]) {
-                    bitmap.setPixel(x + padding, y, 0xFF000000.toInt())
+                    bitmap.setPixel(x, y, 0xFF000000.toInt())
                 }
             }
         }
@@ -131,7 +137,7 @@ class BarcodeGenerator(private val context: Context) {
         val image = Image(ImageDataFactory.create(stream.toByteArray())).apply {
             setWidth(BARCODE_WIDTH)
             setHeight(BARCODE_HEIGHT)
-            setAutoScale(true)
+            setAutoScale(false)
         }
 
         return Cell().apply {
@@ -141,7 +147,7 @@ class BarcodeGenerator(private val context: Context) {
             add(
                 Paragraph(idNumerico).apply {
                     setFontSize(FONT_SIZE)
-                    setTextAlignment(com.itextpdf.layout.properties.TextAlignment.CENTER)
+                    setTextAlignment(TextAlignment.CENTER)
                 }
             )
         }
@@ -163,14 +169,13 @@ class BarcodeGenerator(private val context: Context) {
         private const val MARGIN_RIGHT = 10f
         private const val MARGIN_BOTTOM = 10f
         private const val MARGIN_LEFT = 10f
-        private const val BARCODE_WIDTH = 56.7f // 2cm
-        private const val BARCODE_HEIGHT = 28.35f // 1cm
+        private const val BARCODE_WIDTH = 70.875f  // 2.5cm
+        private const val BARCODE_HEIGHT = 28.35f  // 1cm
         private const val TEXT_HEIGHT = 10f
         private const val SPACING = 5f
         private const val CELL_PADDING = 2f
         private const val FONT_SIZE = 6f
-        private const val BARCODE_MATRIX_WIDTH = 300
-        private const val BARCODE_MATRIX_HEIGHT = 100
-        private const val BARCODE_TARGET_WIDTH = 400
+        private const val BARCODE_MATRIX_WIDTH = 600  // Aumentado significativamente
+        private const val BARCODE_MATRIX_HEIGHT = 80
     }
 }
