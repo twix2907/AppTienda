@@ -72,6 +72,9 @@ enum class SortType {
     PRICE_HIGH_TO_LOW
 }
 
+fun extractNumber(idNumerico: String): Int {
+    return idNumerico.replace(Regex("[^0-9]"), "").toIntOrNull() ?: 0
+}
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ProductListScreen(
@@ -401,12 +404,13 @@ fun ProductListScreen(
                     when (currentSortType) {
                         SortType.ALPHABETICAL_ASC -> compareBy { it.nombre.lowercase() }
                         SortType.ALPHABETICAL_DESC -> compareByDescending { it.nombre.lowercase() }
-                        SortType.ID_ASC -> compareBy { it.idOrdenNumerico }
-                        SortType.ID_DESC -> compareByDescending { it.idOrdenNumerico }
+                        SortType.ID_ASC -> compareBy { extractNumber(it.idNumerico)  }
+                        SortType.ID_DESC -> compareByDescending { extractNumber(it.idNumerico) }
                         SortType.PRICE_LOW_TO_HIGH -> compareBy { it.precio }
                         SortType.PRICE_HIGH_TO_LOW -> compareByDescending { it.precio }
                     }
                 )
+
 
             when (currentViewType) {
                 ViewType.DETAILED -> DetailedProductList(
